@@ -6,6 +6,8 @@ filled in. You check it and press Post.
 
 [![Download for Windows](https://img.shields.io/badge/Download_for_Windows-DepopSellerSetup.exe-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSellerSetup.exe)
 
+*For my beloved wife, and for our friends. Enjoy the app!*
+
 Free and open source ([MIT](LICENSE)). It runs on your own computer - there is no account, no
 server, and nothing is posted for you.
 
