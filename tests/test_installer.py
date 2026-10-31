@@ -6,7 +6,11 @@ from __future__ import annotations
 import argparse
 import collections
 import importlib.metadata
+import importlib.util
+import inspect
+import marshal
 import os
+import py_compile
 import re
 import sys
 import zipfile
@@ -66,6 +70,42 @@ def test_no_file_in_the_bundle_is_too_long_a_path_once_installed(tmp_path: Path)
     deep.write_text("", encoding="utf-8")
     with pytest.raises(installer.BuildError, match="too long"):
         installer.check_path_lengths(tmp_path)
+
+
+def test_the_bundle_never_names_a_folder_of_the_release_machine(tmp_path: Path):
+    # The release machine's home folder carries the owner's name on Windows, and pip and Python
+    # write it into every compiled file they make.
+    home = tmp_path / "Users" / "Some Body"
+    stage = home / "project" / "build" / "installer"
+    module = stage / "runtime" / "Lib" / "site-packages" / "pkg" / "mod.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("def where():" + chr(10) + "    return __file__" + chr(10), encoding="utf-8")
+    compiled = Path(importlib.util.cache_from_source(str(module)))
+    py_compile.compile(str(module), cfile=str(compiled), doraise=True)             # the way pip leaves it
+    orphan = compiled.with_name(f"gone.{sys.implementation.cache_tag}.pyc")       # its module was removed
+    orphan.write_bytes(compiled.read_bytes())
+    legacy = module.with_name("old.pyc")                                          # sourceless, from a wheel
+    legacy.write_bytes(b"not ours")
+    with pytest.raises(installer.BuildError, match="2 file"):
+        installer.check_no_local_paths(stage, home)
+
+    assert installer.strip_build_paths(stage) == 1
+    assert not orphan.exists() and legacy.read_bytes() == b"not ours"
+    installer.check_no_local_paths(stage, home)
+    assert compiled.read_bytes()[:4] == importlib.util.MAGIC_NUMBER
+    code = marshal.loads(compiled.read_bytes()[16:])
+    assert code.co_filename == str(Path("runtime", "Lib", "site-packages", "pkg", "mod.py"))
+
+    notes = stage / "runtime" / "notes.txt"                                        # other spellings count too
+    for text, encoding in ((home.as_posix().upper(), "utf-8"), (str(home), "utf-16-le")):
+        notes.write_bytes(("built in " + text).encode(encoding))
+        with pytest.raises(installer.BuildError, match="notes.txt"):
+            installer.check_no_local_paths(stage, home)
+
+    steps = inspect.getsource(installer.build)
+    assert (steps.index("strip_build_paths(") < steps.index("smoke_test(")
+            < steps.index("check_no_local_paths(") < steps.index("compile_setup("))
+    assert inspect.getsource(installer.smoke_test).count('"-B"') == 2           # the run adds no .pyc
 
 
 def test_inno_setup_is_found_where_it_installs(tmp_path: Path, monkeypatch):

@@ -36,8 +36,18 @@
   .tile:hover img { box-shadow: var(--shadow-lift); }
   .tile.low img { outline: 3px solid var(--danger); outline-offset: -3px; }
   .tile.medium img { outline: 3px solid var(--warn); outline-offset: -3px; }
+  .tile .pick {
+    position: absolute; top: 7px; left: 7px; width: 22px; height: 22px; margin: 0; cursor: pointer;
+    accent-color: var(--primary); opacity: .55; transition: opacity .15s;
+  }
+  .tile:hover .pick, .tile .pick:checked { opacity: 1; }
+  .tile.picked img { outline: 3px solid var(--primary); outline-offset: -3px; }
+  .tile .wbadge {
+    position: absolute; left: 7px; top: 143px; font-size: 11px; font-weight: 600; color: var(--text-2);
+    background: rgba(255, 255, 255, .95); border: 1px solid var(--line-strong); padding: 1px 8px; border-radius: 999px;
+  }
   .tile .cover {
-    position: absolute; top: 7px; left: 7px; font-size: 11px; font-weight: 600; color: #fff;
+    position: absolute; top: 7px; left: 36px; font-size: 11px; font-weight: 600; color: #fff;
     background: var(--primary); padding: 2px 9px; border-radius: 999px;
   }
   .tile .x {
@@ -69,6 +79,15 @@
   footer.dock .dropzone { flex: 1; padding: 14px; font-weight: 500; color: var(--text-2); }
   .dropzone.danger { border-color: #ecc4bf; color: var(--danger-text); background: #fdf6f5; }
   .dropzone.danger.over { border-color: var(--danger); background: var(--danger-soft); }
+
+  #selbar {
+    position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 12;
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 999px;
+    background: var(--surface); border: 1px solid var(--line-strong); box-shadow: var(--shadow-lift);
+  }
+  #selbar .count { font-weight: 600; padding: 0 4px; }
+  #selbar .msg { color: var(--muted); font-size: 13px; max-width: 320px; }
+  #selbar .msg.err { color: var(--danger-text); }
 
   .sug { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line); }
   .sug img { width: 96px; height: 96px; object-fit: contain; background: var(--surface-3); border-radius: 12px; }
@@ -121,6 +140,7 @@
     Drop it on <b>New item</b> at the bottom to split it off, on <b>Unused</b> to keep it as a spare, or on
     <b>Delete</b> when you don't want it at all. <b>Delete item</b> on a card removes the whole item.
     The <b>&#x2715;</b> on a photo deletes just that photo; deleted photos are listed at the very bottom with <b>&#x21A9;</b> to bring one back; the original files are never touched.
+    Tick the box on photos and press <b>White Background</b> to cut the clothes out onto plain white (originals are kept; <b>Restore original</b> undoes it).
     <b>Click a photo</b> to see it large (arrow keys step through the item, Esc closes).
     Use <b>Merge into #</b> on a card to move all of its photos to another item, and the dropdown under a photo to fix its view.
     Red outline = the model was unsure this photo belongs to its item; amber = fairly sure; orange time gap = 2+ minutes since the previous shot.
@@ -148,6 +168,13 @@
     <button id="lb-delete" class="small">Delete photo</button>
   </div>
 </div>
+<div id="selbar" hidden>
+  <span class="count" id="sel-count"></span>
+  <button id="btn-white" class="primary" title="Cut the clothes out of each selected photo and put them on plain white, like a shop catalogue. The original photos are never changed.">White Background</button>
+  <button id="btn-unwhite" title="Go back to the original photos">Restore original</button>
+  <button id="btn-selclear">Clear</button>
+  <span class="msg" id="sel-msg"></span>
+</div>
 <footer class="dock" id="dock">
   <div class="dropzone" id="zone-new">+ Drop here to start a new item</div>
   <div class="dropzone" id="zone-unused">Drop here to keep a photo as a spare (Unused)</div>
@@ -160,9 +187,11 @@ let B = null;          // current batch name
 let INFO = null;       // /batches response
 let dirty = false;
 let dragSeq = null;
+const SEL = new Set();   // stems of the ticked photos (kept outside the DOM: cards are redrawn)
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const wq = (p) => (p.white ? '&w=' + p.white : '');   // a new cut-out must not show the cached picture
 const q = (path) => path + (path.includes('?') ? '&' : '?') + 'batch=' + encodeURIComponent(B);
 
 
@@ -201,6 +230,7 @@ async function loadBatches() {
 $('batch-select').onchange = async () => {
   if (dirty && !confirm('Discard unsaved changes?')) { $('batch-select').value = B; return; }
   B = $('batch-select').value;
+  SEL.clear();
   history.replaceState(null, '', '?batch=' + encodeURIComponent(B));
   await load();
 };
@@ -222,6 +252,7 @@ async function load() {
   showReview(true);
   SUG = await (await fetch(q('/suggestions'))).json();
   render();
+  resumeWhite();
 }
 
 // ---- merge suggestions from the engine's second pass -------------------------------
@@ -419,6 +450,7 @@ function render() {
     + (sizes.length ? `, ${Math.min(...sizes)}-${Math.max(...sizes)} photos per item` : '')
     + (over ? `, ${over} over the ${S.max_photos}-photo limit` : '');
   $('btn-save').disabled = !dirty;
+  updateSelbar();
   document.title = (dirty ? '* ' : '') + 'Depop Seller – Review ' + S.batch;
 }
 
@@ -445,7 +477,14 @@ function itemCard(it) {
   };
   const arr = el('button', 'small', 'Auto-arrange');
   arr.onclick = () => { arrange(it); changed(); };
-  tools.append(merge, arr);
+  const selAll = el('button', 'small', 'Select all');
+  selAll.title = 'Tick every photo of this item';
+  selAll.onclick = () => {
+    const all = it.photos.every(p => SEL.has(p.stem));
+    it.photos.forEach(p => { if (all) SEL.delete(p.stem); else SEL.add(p.stem); });
+    render();
+  };
+  tools.append(merge, arr, selAll);
   const delBtn = el('button', 'small danger', 'Delete item');
   delBtn.title = 'Not for sale: all photos of this item go to Deleted (original files are untouched)';
   delBtn.onclick = () => { if (confirm(`Delete item ${it.id} (${it.photos.length} photos)? You can drag photos back from the Deleted section.`)) deleteItem(it); };
@@ -473,11 +512,26 @@ function tile(p, isCover) {
   if (p.confidence === 'low' || p.confidence === 'medium') t.classList.add(p.confidence);
   const img = el('img');
   img.loading = 'lazy';
-  img.src = q('/thumbs/' + encodeURIComponent(p.stem) + '.jpg');
+  img.src = q('/thumbs/' + encodeURIComponent(p.stem) + '.jpg') + wq(p);
   img.alt = p.file;
   t.appendChild(img);
-  if (isCover) t.appendChild(el('span', 'cover', 'cover'));
   const inDeleted = S.deleted.includes(p);
+  if (!inDeleted) {
+    const pick = el('input', 'pick');
+    pick.type = 'checkbox';
+    pick.title = 'Select this photo';
+    pick.checked = SEL.has(p.stem);
+    t.classList.toggle('picked', pick.checked);
+    pick.onclick = (e) => e.stopPropagation();
+    pick.onchange = () => {
+      if (pick.checked) SEL.add(p.stem); else SEL.delete(p.stem);
+      t.classList.toggle('picked', pick.checked);
+      updateSelbar();
+    };
+    t.appendChild(pick);
+  }
+  if (p.white) t.appendChild(el('span', 'wbadge', 'white bg'));
+  if (isCover) t.appendChild(el('span', 'cover', 'cover'));
   const x = el('button', inDeleted ? 'x restore' : 'x', inDeleted ? '↩' : '✕');
   x.title = inDeleted ? 'Bring this photo back (to Unused)' : 'Delete this photo (goes to the Deleted section)';
   x.onclick = (e) => { e.stopPropagation(); movePhoto(p.seq, inDeleted ? S.unused : S.deleted, 10**9); };
@@ -566,10 +620,10 @@ function lightboxList() {
 function openLightbox(p) {
   LB = p;
   const img = $('lb-img');
-  img.src = q('/thumbs/' + encodeURIComponent(p.stem) + '.jpg');       // instant, from cache
+  img.src = q('/thumbs/' + encodeURIComponent(p.stem) + '.jpg') + wq(p);       // instant, from cache
   const big = new Image();
   big.onload = () => { if (LB === p) img.src = big.src; };
-  big.src = q('/large/' + encodeURIComponent(p.stem) + '.jpg');           // converted on first use
+  big.src = q('/large/' + encodeURIComponent(p.stem) + '.jpg') + wq(p);           // converted on first use
   const where = findPhoto(p.seq);
   const item = where && S.items.find(i => i.photos === where.list);
   $('lb-text').textContent = `${p.file} · ${p.view}` + (item ? ` · item ${item.id}, photo ${where.index + 1} of ${item.photos.length}` : where && where.list === S.deleted ? ' · deleted' : ' · unused');
@@ -600,6 +654,89 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowLeft') stepLightbox(-1);
   else if (e.key === 'ArrowRight') stepLightbox(1);
 });
+
+// ---- white background ---------------------------------------------------------------
+
+let WHITE_BUSY = false;
+
+function updateSelbar() {
+  const live = new Set(allPhotos().filter(p => !S.deleted.includes(p)).map(p => p.stem));
+  for (const stem of [...SEL]) if (!live.has(stem)) SEL.delete(stem);        // gone or deleted meanwhile
+  $('selbar').hidden = SEL.size === 0 && !WHITE_BUSY;
+  $('sel-count').textContent = SEL.size ? `${SEL.size} selected` : '';
+  $('btn-white').disabled = WHITE_BUSY || !SEL.size;
+  $('btn-unwhite').disabled = WHITE_BUSY || !allPhotos().some(p => SEL.has(p.stem) && p.white);
+  $('btn-selclear').disabled = WHITE_BUSY || !SEL.size;
+}
+
+function whiteMsg(text, isError) { const m = $('sel-msg'); m.textContent = text || ''; m.className = 'msg' + (isError ? ' err' : ''); }
+
+function applyWhite(stamps) {          // new cut-outs arrive while the job runs
+  let differs = false;
+  allPhotos().forEach(p => { const w = stamps[p.stem] || 0; if (w !== p.white) { p.white = w; differs = true; } });
+  if (differs) render();
+}
+
+function whitePost(path, body) {
+  return fetch(q(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+}
+
+$('btn-white').onclick = async () => {
+  const stems = [...SEL];
+  const st = await (await fetch(q('/white/status'))).json();
+  let download = false;
+  if (!st.model.runtime) {
+    whiteMsg(/Mac/.test(navigator.platform)
+      ? 'White Background needs a Mac with Apple silicon (M1 or newer) on macOS 14 or later.'
+      : 'The cut-out library is missing: update Depop Seller (Settings) and try again.', true);
+    return;
+  }
+  if (!st.model.ready) {
+    if (!confirm(`White Background needs a small cut-out model (about ${st.model.mb} MB). It downloads once from GitHub, is kept on this computer, and works offline afterwards. Download it now?`)) return;
+    download = true;
+  }
+  const already = allPhotos().filter(p => SEL.has(p.stem) && p.white).length;
+  if (already && !confirm(`${already} of the selected photos already have a white background. Cut them out again?`)) return;
+  const res = await whitePost('/white', { stems, download });
+  if (!res.ok) { whiteMsg(await res.text(), true); return; }
+  WHITE_BUSY = true; updateSelbar();
+  pollWhite();
+};
+
+$('btn-unwhite').onclick = async () => {
+  const res = await whitePost('/white/restore', { stems: [...SEL] });
+  if (!res.ok) { whiteMsg(await res.text(), true); return; }
+  applyWhite((await (await fetch(q('/white/status'))).json()).white);
+  whiteMsg('Original photos restored.');
+  updateSelbar();
+};
+
+$('btn-selclear').onclick = () => { SEL.clear(); whiteMsg(''); render(); };
+
+async function pollWhite() {
+  const st = await (await fetch(q('/white/status'))).json();
+  applyWhite(st.white);
+  if (st.running) {
+    whiteMsg(st.phase === 'downloading' ? `Downloading the cut-out model: ${st.done}%`
+      : st.phase === 'cutting' ? `Cutting out ${st.done}/${st.total}…` : 'Starting…');
+    setTimeout(pollWhite, 700);
+    return;
+  }
+  WHITE_BUSY = false;
+  const failed = (st.failed || []).length;
+  if (st.error && !failed) whiteMsg('Failed: ' + st.error, true);
+  else if (failed) whiteMsg(`${failed} of ${st.total} photos could not be cut out (${st.error}).`, true);
+  else whiteMsg(`Done: ${st.total} photo${st.total === 1 ? '' : 's'} on white.`);
+  updateSelbar();
+}
+
+// a job may still be running when the page is opened or reloaded
+async function resumeWhite() {
+  try {
+    const st = await (await fetch(q('/white/status'))).json();
+    if (st.running) { WHITE_BUSY = true; updateSelbar(); pollWhite(); }
+  } catch (e) { /* no server, no job */ }
+}
 
 // ---- save / apply -----------------------------------------------------------------
 

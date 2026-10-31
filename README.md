@@ -80,7 +80,7 @@ Trash - your data folder stays where it is.
 | Tab | |
 |---|---|
 | **Batches** | Name a batch - a date, "Autumn knits", anything - drop its photos on it, press **Group with Claude**. |
-| **Review** | Drag photos between items and into order. Delete what you don't want; nothing on disk is ever deleted. |
+| **Review** | Drag photos between items and into order. Delete what you don't want; nothing on disk is ever deleted. Tick photos and press **White Background** to cut the clothes out onto plain white, like a shop catalogue (runs on your computer; the first use downloads a 224 MB cut-out model once; **Restore original** undoes it; on a Mac it needs Apple silicon and macOS 14 or later). |
 | **Sell** | Type a line of facts per item, tick items, **Generate Selected Descriptions**. Then **Depop** on each item. Tick **Listed** once it's posted. |
 | **Style** | Tell Claude how descriptions should change, see exactly what changes, accept or discard. Every version is kept. |
 | **Settings** | Your API key, the Claude sign-in, the Chrome helper, **Check for updates**, your data folder, and **Close Depop Seller**. |
@@ -99,6 +99,8 @@ The only things that ever leave your computer:
 - whatever you **post** yourself on Depop.
 
 Pressing **Check for updates** asks GitHub for the newest version number; nothing of yours is sent.
+The first **White Background** downloads the cut-out model from GitHub once, after asking you; the
+photos themselves are cut out on your computer and never sent anywhere.
 
 To use the app on another computer, install it there and copy that one folder across.
 

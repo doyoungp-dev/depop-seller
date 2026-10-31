@@ -13,6 +13,9 @@ dependencies = [
     "pillow-heif>=0.20",
     "anthropic>=0.60",
     "python-dotenv>=1.0",
+    # the White Background cut-out model runs on it; on a Mac it only exists for Apple silicon on
+    # macOS 14+ (Darwin 23), so other Macs install without it and the page says why
+    "onnxruntime>=1.20; sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23')",
 ]
 
 [project.optional-dependencies]

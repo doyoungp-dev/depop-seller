@@ -19,9 +19,12 @@ installed there is passed to pip as a constraint, so the bundle cannot drift to 
 from __future__ import annotations
 
 import importlib.metadata
+import importlib.util
 import json
 import os
 import platform
+import py_compile
+import re
 import shutil
 import socket
 import subprocess
@@ -148,14 +151,15 @@ def smoke_test(stage: Path, version: str, say=print) -> None:
     """Start the staged app exactly as the installed one starts - its own runtime, its own path
     file, nothing from this machine's Python - and ask it for /version."""
     python = stage / "runtime" / "python.exe"
-    probe = ("import depop_seller, PIL, pillow_heif, anthropic, dotenv, sqlite3, ssl, "
+    probe = ("import depop_seller, PIL, pillow_heif, anthropic, dotenv, onnxruntime, sqlite3, ssl, "
              "depop_seller.review, depop_seller.settings, depop_seller.describe, depop_seller.group, "
-             "depop_seller.updates; import json; print(json.dumps({'version': depop_seller.__version__, "
+             "depop_seller.updates, depop_seller.whitebg; import json; print(json.dumps({'version': depop_seller.__version__, "
              "'app': depop_seller.__file__, 'pil': PIL.__file__}))")
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("PYTHON", "ANTHROPIC_"))}
         env.update(DEPOP_SELLER_DATA=str(Path(tmp) / "data"), LOCALAPPDATA=str(Path(tmp) / "local"))
-        done = subprocess.run([str(python), "-c", probe], cwd=tmp, env=env, capture_output=True, text=True, timeout=120)
+        # -B: the run writes no compiled files into the bundle - they would name this computer's folders
+        done = subprocess.run([str(python), "-B", "-c", probe], cwd=tmp, env=env, capture_output=True, text=True, timeout=120)
         if done.returncode != 0:
             raise BuildError("the staged app does not import: " + done.stderr.strip()[-800:])
         where = json.loads(done.stdout)
@@ -166,7 +170,7 @@ def smoke_test(stage: Path, version: str, say=print) -> None:
                 raise BuildError(f"the staged app loaded {key} from outside the bundle: {where[key]}")
 
         port = _free_port()
-        server = subprocess.Popen([str(python), "-m", "depop_seller", "hub", "--no-browser", "--port", str(port)],
+        server = subprocess.Popen([str(python), "-B", "-m", "depop_seller", "hub", "--no-browser", "--port", str(port)],
                                   cwd=str(stage / "app"), env=env | {"DEPOP_QUIET": "1"},
                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
@@ -189,6 +193,61 @@ def smoke_test(stage: Path, version: str, say=print) -> None:
             if server.poll() is None:
                 server.kill()
     say(f"   the bundle starts on its own and answers as {version}")
+
+
+def strip_build_paths(stage: Path) -> int:
+    """Recompile the stage's .pyc files so each names its source relative to the install folder.
+
+    pip and Python write the full path of a module's source into its compiled file, and on the
+    release machine that path runs through the home folder - on Windows, the owner's real name - out
+    to everyone who downloads the installer. Python swaps the stored path for the real one whenever
+    it loads a module whose source is there, so the app behaves the same and still starts compiled.
+    """
+    count = 0
+    for pyc in sorted(stage.rglob("*.pyc")):
+        try:
+            source = Path(importlib.util.source_from_cache(str(pyc)))
+        except ValueError:                        # not in a __pycache__: a wheel shipped it that way
+            continue
+        if not source.is_file():                  # its module is gone, so Python never loads it
+            pyc.unlink()
+            continue
+        level = re.search(r"\.opt-(\d)\.pyc$", pyc.name)
+        try:
+            py_compile.compile(str(source), cfile=str(pyc), dfile=str(source.relative_to(stage)),
+                               doraise=True, optimize=int(level.group(1)) if level else 0)
+        except py_compile.PyCompileError as e:
+            raise BuildError(f"could not recompile {source.relative_to(stage)}: {e.msg}") from e
+        count += 1
+    return count
+
+
+def _spellings(folder: Path) -> set[str]:
+    """The ways a folder can be written into a file: either slash, and Windows' short 8.3 name
+    (TEMP is often spelt that way, and it keeps the first letters of the user's name)."""
+    names = {str(folder), folder.as_posix()}
+    if os.name == "nt":
+        import ctypes
+        buffer = ctypes.create_unicode_buffer(1024)
+        if ctypes.windll.kernel32.GetShortPathNameW(str(folder), buffer, len(buffer)):
+            names |= {buffer.value, Path(buffer.value).as_posix()}
+    return names
+
+
+def check_no_local_paths(stage: Path, *folders: Path) -> None:
+    """Refuse a bundle in which any file names one of these folders of the release machine, in
+    UTF-8 or UTF-16, in any case."""
+    markers = {s.encode(encoding).lower() for f in folders for s in _spellings(f)
+               for encoding in ("utf-8", "utf-16-le")}
+
+    def names_one(file: Path) -> bool:
+        data = file.read_bytes().lower()
+        return any(m in data for m in markers)
+
+    found = [p.relative_to(stage).as_posix() for p in sorted(stage.rglob("*")) if p.is_file() and names_one(p)]
+    if found:
+        raise BuildError(f"{len(found)} file(s) in the bundle name a folder of this computer, "
+                         f"e.g. {', '.join(found[:3])}")
 
 
 # Windows refuses paths over 260 characters unless long paths were switched on, which they are not
@@ -233,7 +292,9 @@ def build(root: Path, release_zip: Path, version: str, *, say=print) -> Path:
     embed = embeddable(root / "build", python_version)
     stage_runtime(stage, embed, python_version, dependencies(root / "pyproject.toml"), say=say)
     stage_app(stage, release_zip)
-    smoke_test(stage, version, say=say)
+    say(f"   {strip_build_paths(stage)} compiled files re-pointed inside the bundle")
+    smoke_test(stage, version, say=say)                            # on exactly the files that ship
+    check_no_local_paths(stage, Path.home(), root.resolve())
     check_path_lengths(stage)
     setup = compile_setup(root, stage, root / "dist", version)
     say(f"   {setup.name}: {setup.stat().st_size / 1024 / 1024:.1f} MB")

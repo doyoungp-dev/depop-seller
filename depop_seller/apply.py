@@ -47,7 +47,8 @@ def apply_batch(
     kept = [r for r in rows if not r.skip]
     names = {r.raw_file: f"{r.item_id}_{r.photo_no}.jpg" for r in kept}
     for i, r in enumerate(kept, 1):
-        convert(paths.raw / r.raw_file, dst / names[r.raw_file], max_px=max_px)
+        white = paths.white / f"{r.stem}.jpg"
+        convert(white if white.is_file() else paths.raw / r.raw_file, dst / names[r.raw_file], max_px=max_px)
         if progress:
             progress(i, len(kept))
         if i % 25 == 0 or i == len(kept):

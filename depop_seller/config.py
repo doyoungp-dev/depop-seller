@@ -156,6 +156,11 @@ class BatchPaths:
         return self.root / "cache"
 
     @property
+    def white(self) -> Path:
+        """White-background versions (2048 px, and 512 px in white/thumbs/), named like the photo's stem."""
+        return self.cache / "white"
+
+    @property
     def manifest(self) -> Path:
         return self.root / "manifest.csv"
 

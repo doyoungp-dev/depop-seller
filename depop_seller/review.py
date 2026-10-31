@@ -35,7 +35,10 @@ Routes:
   GET  /batches               every batch folder with its status, plus API key availability
   GET  /state?batch=          current grouping as JSON (404 if the batch has no manifest yet)
   GET  /thumbs/<file>?batch=  cached thumbnail
-  GET  /large/<file>?batch=   2048 px JPEG of the original, converted on first request (cache/large/)
+  GET  /large/<file>?batch=   2048 px JPEG (the white-background version if there is one), made on first request
+  GET  /white/status?batch=   {running, phase, done, total, error, model, white: {stem: stamp}}
+  POST /white?batch=          {"stems": [...], "download": bool}: put the clothes on white (background thread)
+  POST /white/restore?batch=  {"stems": [...]}: bring the original photos back
   POST /save?batch=           {"items": [[seq, ...], ...], "unused": [seq, ...], "deleted": [seq, ...],
                                "views": {seq: view}}  (deleted = not for sale; raw files are never touched)
   POST /group?batch=          {"model": ...}  -> scan + Claude grouping in a background thread
@@ -146,10 +149,13 @@ class ReviewSession:
     def _mtime(self) -> int:
         return self.paths.manifest.stat().st_mtime_ns if self.paths.manifest.exists() else 0
 
-    def large_image(self, stem: str):
-        """Path of a 2048 px JPEG for the photo with this stem, converting the original once."""
+    def _row(self, stem: str) -> Row | None:
         with self.lock:
-            row = next((r for r in self.rows if r.stem == stem), None)
+            return next((r for r in self.rows if r.stem == stem), None)
+
+    def original_large(self, stem: str):
+        """Path of a 2048 px JPEG of the *original* photo, converting it once."""
+        row = self._row(stem)
         if row is None:
             return None
         out = self.paths.cache / "large" / f"{stem}.jpg"
@@ -158,17 +164,47 @@ class ReviewSession:
             convert(self.paths.raw / row.raw_file, out, max_px=2048, quality=85)
         return out
 
+    def large_image(self, stem: str):
+        """Path of the 2048 px JPEG the rest of the app shows and uploads: the white-background
+        version when the seller made one, else the original converted once."""
+        white = self.paths.white / f"{stem}.jpg"
+        if white.is_file() and self._row(stem) is not None:
+            return white
+        return self.original_large(stem)
+
+    def white_stamps(self) -> dict[str, int]:
+        """stem -> when its white-background version was made, for photos that have one. The page
+        appends it to image URLs so a new cut-out replaces the cached picture."""
+        folder = self.paths.white
+        if not folder.is_dir():
+            return {}
+        return {p.stem: p.stat().st_mtime_ns // 1_000_000 for p in folder.glob("*.jpg")}
+
+    def restore_originals(self, stems: list[str]) -> int:
+        """Delete the white-background versions of these photos. The originals were never touched."""
+        n = 0
+        for stem in stems:
+            if self._row(stem) is None:
+                continue
+            for f in (self.paths.white / f"{stem}.jpg", self.paths.white / "thumbs" / f"{stem}.jpg"):
+                if f.is_file():
+                    f.unlink()
+                    n += f.parent.name != "thumbs"
+        return n
+
     def thumb_image(self, stem: str):
         """Path of the 512 px thumbnail, making it from the original if it is not there.
 
         thumbs/ is a cache and is gitignored, so a batch folder copied from another computer (or
         one trimmed to save space) can arrive without it. Rebuilding beats showing broken tiles.
         """
+        white = self.paths.white / "thumbs" / f"{stem}.jpg"
+        if white.is_file():
+            return white
         out = self.paths.thumbs / f"{stem}.jpg"
         if out.is_file():
             return out
-        with self.lock:
-            row = next((r for r in self.rows if r.stem == stem), None)
+        row = self._row(stem)
         source = self.paths.raw / row.raw_file if row else None
         if source is None or not source.is_file():
             return None
@@ -182,13 +218,14 @@ class ReviewSession:
     # ---- state -------------------------------------------------------------------------
 
     @staticmethod
-    def _photo(r: Row) -> dict:
+    def _photo(r: Row, white: dict[str, int]) -> dict:
         return {
             "seq": r.seq, "file": r.raw_file, "stem": r.stem, "gap": r.gap_s, "taken": r.taken_at,
-            "view": r.view, "confidence": r.confidence, "note": r.note,
+            "view": r.view, "confidence": r.confidence, "note": r.note, "white": white.get(r.stem, 0),
         }
 
     def state(self) -> dict:
+        white = self.white_stamps()
         with self.lock:
             grouped = items(self.rows)
             count = sum(1 for p in self.paths.sort_image.glob("*.jpg")) if self.paths.sort_image.is_dir() else 0
@@ -196,9 +233,9 @@ class ReviewSession:
                 "batch": self.paths.batch,
                 "views": list(VIEWS),
                 "max_photos": MAX_PHOTOS_PER_ITEM,
-                "items": [{"id": i, "photos": [self._photo(r) for r in g]} for i, g in grouped.items()],
-                "unused": [self._photo(r) for r in unused(self.rows)],
-                "deleted": [self._photo(r) for r in deleted(self.rows)],
+                "items": [{"id": i, "photos": [self._photo(r, white) for r in g]} for i, g in grouped.items()],
+                "unused": [self._photo(r, white) for r in unused(self.rows)],
+                "deleted": [self._photo(r, white) for r in deleted(self.rows)],
                 "summary": summary(self.rows),
                 "sort_image_count": count,
                 "manifest": str(self.paths.manifest),
@@ -333,6 +370,7 @@ class ReviewServer:
         self.lock = threading.Lock()
         self._lister = None
         self.describe_state: dict[str, dict] = {}
+        self.white_state: dict[str, dict] = {}
         self.style_job: dict = {"running": False, "error": None, "summary": None, "diff": None, "markdown": None}
         self.started_at = datetime.now()
         self.code_mtime = code_mtime()          # to spot an update while the app is running
@@ -440,6 +478,63 @@ class ReviewServer:
 
         threading.Thread(target=work, name="describe", daemon=True).start()
         return {"started": todo}
+
+    # ---- white backgrounds --------------------------------------------------------------
+
+    def white_status(self, batch: str | None) -> dict:
+        from . import whitebg
+
+        s = self.session(batch)
+        st = dict(self.white_state.get(s.paths.batch) or {"running": False})
+        st["model"] = {"runtime": whitebg.runtime_available(), "ready": whitebg.model_ready(), "mb": whitebg.MODEL_MB}
+        st["white"] = s.white_stamps()
+        return st
+
+    def start_white(self, batch: str | None, stems: list[str], download: bool) -> dict:
+        """Put the clothes in these photos on plain white, one after another, in a background
+        thread. The cut-out model is fetched first if it is missing - but only when the page has
+        said the seller agreed (`download`). Originals are never modified: results go to cache/white/."""
+        from . import whitebg
+
+        s = self.session(batch)
+        known = {r.stem for r in s.rows if not r.deleted}
+        todo = [t for t in dict.fromkeys(stems) if t in known]
+        if not todo:
+            raise ValueError("select at least one photo first")
+        if not whitebg.runtime_available():
+            raise RuntimeError("the cut-out library is not installed - update Depop Seller and try again")
+        if not whitebg.model_ready() and not download:
+            raise RuntimeError("the cut-out model has to be downloaded first")
+        with self.lock:
+            if self.white_state.get(s.paths.batch, {}).get("running"):
+                raise RuntimeError("photos are already being put on white")
+            st = {"running": True, "phase": "starting", "done": 0, "total": len(todo), "error": None, "failed": []}
+            self.white_state[s.paths.batch] = st
+
+        def work() -> None:
+            try:
+                if not whitebg.model_ready():
+                    st.update(phase="downloading", done=0, total=100)
+                    whitebg.download_model(lambda got, total: st.update(done=min(100, got * 100 // total)))
+                st.update(phase="cutting", done=0, total=len(todo))
+                for n, stem in enumerate(todo, 1):
+                    try:
+                        src = s.original_large(stem)
+                        whitebg.make_white(src, s.paths.white / f"{stem}.jpg", s.paths.white / "thumbs" / f"{stem}.jpg")
+                    except Exception as e:      # one bad photo must not stop the rest
+                        log.exception("white background failed for %s", stem)
+                        st["failed"].append(stem)
+                        st["error"] = f"{stem}: {e}"
+                    st["done"] = n
+                log.info("white background: %d photo(s) done for %s", len(todo) - len(st["failed"]), s.paths.batch)
+            except Exception as e:
+                log.exception("white background job failed")
+                st["error"] = str(e)
+            finally:
+                st.update(running=False, phase="done")
+
+        threading.Thread(target=work, name="white", daemon=True).start()
+        return {"started": len(todo)}
 
     def sell_open(self, batch: str | None, item_id: int) -> dict:
         """The fallback for when the Chrome helper is missing: an automated browser window. Only
@@ -558,9 +653,12 @@ class ReviewServer:
             s = self.sessions.get(paths.batch)
             if s is not None and s.apply_state["running"]:
                 raise RuntimeError("this batch is being exported right now")
+            if self.white_state.get(paths.batch, {}).get("running"):
+                raise RuntimeError("photos of this batch are being put on white right now")
             paths.root.rename(target)
             self.sessions.pop(paths.batch, None)
             self.group_state.pop(paths.batch, None)
+            self.white_state.pop(paths.batch, None)
             self.describe_state[to] = self.describe_state.pop(paths.batch, {})
         conn = db.connect()
         try:
@@ -582,6 +680,9 @@ class ReviewServer:
         tmp = dest.with_name(dest.name + ".part")
         tmp.write_bytes(data)
         tmp.replace(dest)
+        if replace:                                     # a new picture makes its old cut-out wrong
+            for old in (paths.white / f"{dest.stem}.jpg", paths.white / "thumbs" / f"{dest.stem}.jpg"):
+                old.unlink(missing_ok=True)
         return {"name": name, "written": True, "bytes": len(data)}
 
     def import_folder(self, batch: str | None, folder: str) -> dict:
@@ -660,6 +761,8 @@ class ReviewServer:
             return "grouping photos"
         if any(d.get("running") for batch in self.describe_state.values() for d in batch.values()):
             return "writing a description"
+        if any(st.get("running") for st in self.white_state.values()):
+            return "cutting out photos"
         if self.style_job.get("running"):
             return "rewriting the style"
         if any(s.apply_state["running"] for s in self.sessions.values()):
@@ -961,6 +1064,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
                 self._json(self.server_state.batches())
             elif path == "/state":
                 self._json(self.server_state.session(batch).state())
+            elif path == "/white/status":
+                self._json(self.server_state.white_status(batch))
             elif path == "/apply/status":
                 self._json(self.server_state.session(batch).apply_state)
             elif path == "/group/status":
@@ -999,6 +1104,13 @@ class ReviewHandler(BaseHTTPRequestHandler):
         try:
             if path == "/save":
                 self._json(self.server_state.session(batch).save(self._body()))
+            elif path == "/white":
+                body = self._body()
+                self._json(self.server_state.start_white(batch, [str(t) for t in body.get("stems") or []],
+                                                         bool(body.get("download"))), HTTPStatus.ACCEPTED)
+            elif path == "/white/restore":
+                stems = [str(t) for t in self._body().get("stems") or []]
+                self._json({"restored": self.server_state.session(batch).restore_originals(stems)})
             elif path == "/apply":
                 self.server_state.session(batch).start_apply(bool(self._body().get("force")))
                 self._json({"started": True}, HTTPStatus.ACCEPTED)
