@@ -7,8 +7,9 @@ cd "$(dirname "$0")"
 say() { printf '\n== %s\n' "$1"; }
 
 # ---------------------------------------------------------------- Python
-PY=""
-for candidate in python3.14 python3.13 python3.12 python3; do
+PY="${DEPOP_PYTHON:-}"                 # the macOS app has already found one
+for candidate in python3.14 python3.13 python3.15 python3.12 python3; do
+    [ -n "$PY" ] && break
     if command -v "$candidate" >/dev/null 2>&1; then
         if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
             PY="$candidate"

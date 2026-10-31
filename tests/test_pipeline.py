@@ -381,7 +381,7 @@ def test_describe_guards_and_db_migration(batch, tmp_path: Path):
     assert cover.seq == 1 and [r.seq for r in closeups] == [3, 5, 6]
 
 def _stub_claude_cli(tmp_path: Path, inner: dict) -> Path:
-    """A fake `claude.cmd` speaking the stream-json protocol: it reports the credential source it
+    """A fake `claude` (a .cmd on Windows, a shell script elsewhere) speaking the stream-json protocol: it reports the credential source it
     sees (ANTHROPIC_API_KEY in its environment or not), then a result envelope wrapping `inner`."""
     import json
     import sys
@@ -411,10 +411,16 @@ def _stub_claude_cli(tmp_path: Path, inner: dict) -> Path:
                           'result': 'Sure!' + nl + '```json' + nl + json.dumps(inner) + nl + '```',
                           'usage': {'input_tokens': 42, 'output_tokens': 7}}))
         """), encoding="utf-8")
-    crlf = chr(13) + chr(10)
-    stub = tmp_path / "claude.cmd"
-    stub.write_text("@echo off" + crlf + f'"{sys.executable}" "{stub_py}" "{tmp_path / "inner.json"}" %*' + crlf,
-                    encoding="utf-8")
+    if os.name == "nt":
+        crlf = chr(13) + chr(10)
+        stub = tmp_path / "claude.cmd"
+        stub.write_text("@echo off" + crlf + f'"{sys.executable}" "{stub_py}" "{tmp_path / "inner.json"}" %*' + crlf,
+                        encoding="utf-8")
+    else:                                                  # macOS / Linux: an executable shell script
+        stub = tmp_path / "claude"
+        stub.write_text("#!/bin/sh" + chr(10) + f'exec "{sys.executable}" "{stub_py}" "{tmp_path / "inner.json"}" "$@"'
+                        + chr(10), encoding="utf-8")
+        stub.chmod(0o755)
     return stub
 
 
@@ -633,6 +639,13 @@ def test_claude_cli_is_found_on_macos_without_PATH(tmp_path: Path, monkeypatch):
         (bundle / version / "claude").write_text("", encoding="utf-8")
     assert describe.find_claude_cli() == bundle / "2.1.275" / "claude"
 
+    # how the macOS desktop app really keeps it: each build as a signed app inside the version
+    app_cli = bundle / "2.1.309" / "5af865b9901c" / "claude.app" / "Contents" / "MacOS" / "claude"
+    app_cli.parent.mkdir(parents=True)
+    app_cli.write_text("", encoding="utf-8")
+    (bundle / "2.1.309" / "5af865b9901c" / ".verified").write_text("", encoding="utf-8")
+    assert describe.find_claude_cli() == app_cli
+
 
 def test_open_folder_uses_the_platform_command(tmp_path: Path, monkeypatch):
     from depop_seller import desktop
@@ -764,6 +777,29 @@ def test_only_depop_gets_cors_and_other_sites_cannot_post(batch):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def test_a_second_copy_is_refused_but_reopening_after_closing_is_not():
+    """Two copies may never share the port. On macOS/Linux the port must also be free again the
+    moment the app closes - not a minute later - or reopening it shows a window onto nothing."""
+    import threading
+    import urllib.request
+    from functools import partial
+
+    from depop_seller.review import ReviewHandler, ReviewServer, _Server
+
+    srv = _Server(("127.0.0.1", 0), partial(ReviewHandler, ReviewServer()))
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        with pytest.raises(OSError):
+            _Server(("127.0.0.1", port), partial(ReviewHandler, ReviewServer()))
+        urllib.request.urlopen(f"http://127.0.0.1:{port}/version", timeout=5).read()   # a window was open
+    finally:
+        srv.shutdown()
+        srv.server_close()
+    if os.name != "nt":
+        _Server(("127.0.0.1", port), partial(ReviewHandler, ReviewServer())).server_close()
 
 
 STYLE_SAMPLE = chr(10).join([

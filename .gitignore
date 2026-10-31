@@ -24,6 +24,9 @@ dist/
 *.sqlite3
 .chrome-profile/
 
+# Finder's folder settings, written into every folder a Mac opens
+.DS_Store
+
 # macOS app icon built by setup.sh from depop_seller/static/icon.png
 Depop Seller.app/Contents/Resources/
 

@@ -72,12 +72,22 @@ CLI_NAME = "claude.exe" if os.name == "nt" else "claude"
 CLAUDE_CLI_CANDIDATES = [Path(p) for p in os.environ.get("DEPOP_CLAUDE_CLI", "").split(os.pathsep) if p]
 
 
+def _cli_in(version_dir: Path) -> Path | None:
+    """The CLI inside one version folder of the bundle: `<version>/claude(.exe)`, or - how the
+    macOS desktop app keeps it, as a signed app per build - `<version>/<build>/claude.app/Contents/MacOS/claude`."""
+    direct = version_dir / CLI_NAME
+    if direct.is_file():
+        return direct
+    builds = [p for p in version_dir.glob(f"*/claude.app/Contents/MacOS/{CLI_NAME}") if p.is_file()]
+    return max(builds, key=lambda p: p.stat().st_mtime) if builds else None
+
+
 def _newest_bundle(bundle: Path) -> Path | None:
     if not bundle.is_dir():
         return None
-    versions = sorted((d for d in bundle.iterdir() if (d / CLI_NAME).is_file()),
-                      key=lambda d: [int(x) if x.isdigit() else x for x in d.name.split(".")])
-    return versions[-1] / CLI_NAME if versions else None
+    versions = sorted(((d, cli) for d in bundle.iterdir() if d.is_dir() and (cli := _cli_in(d))),
+                      key=lambda pair: [int(x) if x.isdigit() else x for x in pair[0].name.split(".")])
+    return versions[-1][1] if versions else None
 
 
 def _bundle_dirs() -> list[Path]:

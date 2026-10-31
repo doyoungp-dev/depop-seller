@@ -45,9 +45,15 @@ STUB = textwrap.dedent("""
 
 def _stub_cli(tmp_path: Path) -> Path:
     (tmp_path / "stub.py").write_text(STUB, encoding="utf-8")
-    crlf = chr(13) + chr(10)
-    cmd = tmp_path / "claude.cmd"
-    cmd.write_text("@echo off" + crlf + f'"{sys.executable}" "{tmp_path / "stub.py"}" %*' + crlf, encoding="utf-8")
+    if os.name == "nt":
+        crlf = chr(13) + chr(10)
+        cmd = tmp_path / "claude.cmd"
+        cmd.write_text("@echo off" + crlf + f'"{sys.executable}" "{tmp_path / "stub.py"}" %*' + crlf, encoding="utf-8")
+    else:                                                  # macOS / Linux: an executable shell script
+        cmd = tmp_path / "claude"
+        cmd.write_text("#!/bin/sh" + chr(10) + f'exec "{sys.executable}" "{tmp_path / "stub.py"}" "$@"' + chr(10),
+                       encoding="utf-8")
+        cmd.chmod(0o755)
     return cmd
 
 
@@ -61,7 +67,6 @@ def _wait(sign_in: settings.SignIn, until, seconds: float = 20) -> dict:
     raise AssertionError(f"timed out: {sign_in.status()}")
 
 
-@pytest.mark.skipif(os.name != "nt", reason="the stub CLI is a .cmd")
 def test_signing_in_happens_in_the_browser_with_no_window_and_no_api_key(tmp_path: Path, monkeypatch):
     cli = _stub_cli(tmp_path)
     monkeypatch.setattr(settings, "find_claude_cli", lambda: cli)
@@ -85,7 +90,10 @@ def test_signing_in_happens_in_the_browser_with_no_window_and_no_api_key(tmp_pat
     assert state["url"].startswith("https://claude.example/oauth/authorize")    # the "no page opened?" link
     argv, kw = started[0]
     assert argv[1:] == ["auth", "login", "--claudeai"]
-    assert kw.get("creationflags", 0) & 0x08000000                              # no console window
+    if os.name == "nt":
+        assert kw.get("creationflags", 0) & 0x08000000                          # no console window
+    else:
+        assert kw.get("start_new_session") is True                              # its own group, to stop it whole
     assert not any(k.upper().startswith("ANTHROPIC_") for k in kw["env"])      # the plan, never the API
     assert sign_in.start()["running"] is True and len(started) == 1            # a second press joins the first
 

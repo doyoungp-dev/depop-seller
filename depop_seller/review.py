@@ -1095,8 +1095,11 @@ class ReviewHandler(BaseHTTPRequestHandler):
 
 class _Server(ThreadingHTTPServer):
     # HTTPServer enables SO_REUSEADDR, which on Windows lets a second process bind the same
-    # port instead of failing. We want a hard failure so a double launch is detected.
-    allow_reuse_address = False
+    # port instead of failing. We want a hard failure so a double launch is detected. On macOS
+    # and Linux it means something else - a second listener is refused either way - and without
+    # it the port stays blocked for up to a minute after the app closes, so reopening it at once
+    # found the port "busy" and showed a window onto a server that had already gone.
+    allow_reuse_address = os.name != "nt"
 
 
 def _port_in_use(port: int) -> bool:
