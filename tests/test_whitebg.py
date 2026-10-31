@@ -26,6 +26,12 @@ def centre_mask(_im) -> np.ndarray:
     return m
 
 
+@pytest.fixture(autouse=True)
+def switched_on(monkeypatch):
+    """The feature is off in the app (config.WHITE_BACKGROUND); these tests exercise it switched on."""
+    monkeypatch.setattr("depop_seller.config.WHITE_BACKGROUND", True)
+
+
 @pytest.fixture
 def ready(monkeypatch):
     monkeypatch.setattr(whitebg, "predict_mask", centre_mask)
@@ -171,6 +177,30 @@ def test_replacing_a_photo_drops_its_stale_cut_out(batch, ready):
     _wait(server, batch.batch)
     server.add_photo(batch.batch, "IMG_1001.jpg", (batch.raw / "IMG_1002.jpg").read_bytes(), replace=True)
     assert not (batch.white / "IMG_1001.jpg").exists()
+
+
+def test_switched_off_the_app_hides_it_refuses_it_and_shows_originals(batch, ready, monkeypatch):
+    """With WHITE_BACKGROUND off, cut-outs made while it was on are ignored (but kept on disk), so
+    the review page, the Sell page, the Depop upload and the export all use the original photos."""
+    session = _session(batch)
+    server = ReviewServer()
+    server.sessions[batch.batch] = session
+    server.start_white(batch.batch, ["IMG_1001"], download=False)
+    _wait(server, batch.batch)
+    assert session.large_image("IMG_1001").parent.name == "white"
+
+    monkeypatch.setattr("depop_seller.config.WHITE_BACKGROUND", False)
+    state = session.state()
+    assert state["white_enabled"] is False
+    assert all(p["white"] == 0 for g in state["items"] for p in g["photos"])
+    assert session.large_image("IMG_1001").parent.name == "large"
+    assert session.thumb_image("IMG_1001").parent == batch.thumbs
+    with pytest.raises(RuntimeError, match="switched off"):
+        server.start_white(batch.batch, ["IMG_1002"], download=True)
+    apply_batch(batch, session.rows, force=True)
+    with Image.open(batch.sort_image / "1_1.jpg") as im:
+        assert im.getpixel((3, 3)) != (255, 255, 255)                      # the original's grey floor
+    assert (batch.white / "IMG_1001.jpg").is_file()                        # nothing deleted
 
 
 class FakeResponse(io.BytesIO):

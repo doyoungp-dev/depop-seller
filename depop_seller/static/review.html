@@ -47,9 +47,10 @@
     background: rgba(255, 255, 255, .95); border: 1px solid var(--line-strong); padding: 1px 8px; border-radius: 999px;
   }
   .tile .cover {
-    position: absolute; top: 7px; left: 36px; font-size: 11px; font-weight: 600; color: #fff;
+    position: absolute; top: 7px; left: 7px; font-size: 11px; font-weight: 600; color: #fff;
     background: var(--primary); padding: 2px 9px; border-radius: 999px;
   }
+  .tile .pick ~ .cover { left: 36px; }        /* make room for the White Background checkbox */
   .tile .x {
     position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0; font-size: 13px;
     border-radius: 999px; background: rgba(255, 255, 255, .95); border: 1px solid var(--line);
@@ -140,7 +141,7 @@
     Drop it on <b>New item</b> at the bottom to split it off, on <b>Unused</b> to keep it as a spare, or on
     <b>Delete</b> when you don't want it at all. <b>Delete item</b> on a card removes the whole item.
     The <b>&#x2715;</b> on a photo deletes just that photo; deleted photos are listed at the very bottom with <b>&#x21A9;</b> to bring one back; the original files are never touched.
-    Tick the box on photos and press <b>White Background</b> to cut the clothes out onto plain white (originals are kept; <b>Restore original</b> undoes it).
+    <span id="white-help" hidden>Tick the box on photos and press <b>White Background</b> to cut the clothes out onto plain white (originals are kept; <b>Restore original</b> undoes it).</span>
     <b>Click a photo</b> to see it large (arrow keys step through the item, Esc closes).
     Use <b>Merge into #</b> on a card to move all of its photos to another item, and the dropdown under a photo to fix its view.
     Red outline = the model was unsure this photo belongs to its item; amber = fairly sure; orange time gap = 2+ minutes since the previous shot.
@@ -252,7 +253,7 @@ async function load() {
   showReview(true);
   SUG = await (await fetch(q('/suggestions'))).json();
   render();
-  resumeWhite();
+  if (S.white_enabled) resumeWhite();
 }
 
 // ---- merge suggestions from the engine's second pass -------------------------------
@@ -484,7 +485,8 @@ function itemCard(it) {
     it.photos.forEach(p => { if (all) SEL.delete(p.stem); else SEL.add(p.stem); });
     render();
   };
-  tools.append(merge, arr, selAll);
+  tools.append(merge, arr);
+  if (S.white_enabled) tools.appendChild(selAll);
   const delBtn = el('button', 'small danger', 'Delete item');
   delBtn.title = 'Not for sale: all photos of this item go to Deleted (original files are untouched)';
   delBtn.onclick = () => { if (confirm(`Delete item ${it.id} (${it.photos.length} photos)? You can drag photos back from the Deleted section.`)) deleteItem(it); };
@@ -516,7 +518,7 @@ function tile(p, isCover) {
   img.alt = p.file;
   t.appendChild(img);
   const inDeleted = S.deleted.includes(p);
-  if (!inDeleted) {
+  if (S.white_enabled && !inDeleted) {
     const pick = el('input', 'pick');
     pick.type = 'checkbox';
     pick.title = 'Select this photo';
@@ -662,7 +664,8 @@ let WHITE_BUSY = false;
 function updateSelbar() {
   const live = new Set(allPhotos().filter(p => !S.deleted.includes(p)).map(p => p.stem));
   for (const stem of [...SEL]) if (!live.has(stem)) SEL.delete(stem);        // gone or deleted meanwhile
-  $('selbar').hidden = SEL.size === 0 && !WHITE_BUSY;
+  $('white-help').hidden = !S.white_enabled;
+  $('selbar').hidden = !S.white_enabled || (SEL.size === 0 && !WHITE_BUSY);
   $('sel-count').textContent = SEL.size ? `${SEL.size} selected` : '';
   $('btn-white').disabled = WHITE_BUSY || !SEL.size;
   $('btn-unwhite').disabled = WHITE_BUSY || !allPhotos().some(p => SEL.has(p.stem) && p.white);

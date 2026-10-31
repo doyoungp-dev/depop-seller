@@ -168,7 +168,7 @@ class ReviewSession:
         """Path of the 2048 px JPEG the rest of the app shows and uploads: the white-background
         version when the seller made one, else the original converted once."""
         white = self.paths.white / f"{stem}.jpg"
-        if white.is_file() and self._row(stem) is not None:
+        if config.WHITE_BACKGROUND and white.is_file() and self._row(stem) is not None:
             return white
         return self.original_large(stem)
 
@@ -176,7 +176,7 @@ class ReviewSession:
         """stem -> when its white-background version was made, for photos that have one. The page
         appends it to image URLs so a new cut-out replaces the cached picture."""
         folder = self.paths.white
-        if not folder.is_dir():
+        if not config.WHITE_BACKGROUND or not folder.is_dir():
             return {}
         return {p.stem: p.stat().st_mtime_ns // 1_000_000 for p in folder.glob("*.jpg")}
 
@@ -199,7 +199,7 @@ class ReviewSession:
         one trimmed to save space) can arrive without it. Rebuilding beats showing broken tiles.
         """
         white = self.paths.white / "thumbs" / f"{stem}.jpg"
-        if white.is_file():
+        if config.WHITE_BACKGROUND and white.is_file():
             return white
         out = self.paths.thumbs / f"{stem}.jpg"
         if out.is_file():
@@ -233,6 +233,7 @@ class ReviewSession:
                 "batch": self.paths.batch,
                 "views": list(VIEWS),
                 "max_photos": MAX_PHOTOS_PER_ITEM,
+                "white_enabled": config.WHITE_BACKGROUND,
                 "items": [{"id": i, "photos": [self._photo(r, white) for r in g]} for i, g in grouped.items()],
                 "unused": [self._photo(r, white) for r in unused(self.rows)],
                 "deleted": [self._photo(r, white) for r in deleted(self.rows)],
@@ -494,6 +495,8 @@ class ReviewServer:
         """Put the clothes in these photos on plain white, one after another, in a background
         thread. The cut-out model is fetched first if it is missing - but only when the page has
         said the seller agreed (`download`). Originals are never modified: results go to cache/white/."""
+        if not config.WHITE_BACKGROUND:
+            raise RuntimeError("White Background is switched off in this version of Depop Seller")
         from . import whitebg
 
         s = self.session(batch)

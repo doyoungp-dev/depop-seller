@@ -128,6 +128,10 @@ THUMB_SIZE = 512            # long edge of the cached thumbnails sent to the mod
 OUTPUT_MAX_PX = 2048        # long edge of the JPEGs written to sort_image/
 OUTPUT_JPEG_QUALITY = 90
 MAX_PHOTOS_PER_ITEM = 8     # Depop's listing limit
+# White Background (whitebg.py) stays in the code but is switched off: the cut-outs were not good
+# enough to sell with. Off means no checkboxes or buttons on the Review page, /white refused, and
+# cut-outs made while it was on are ignored (left on disk) so originals are shown and uploaded.
+WHITE_BACKGROUND = False
 
 DEFAULT_MODEL = "claude-opus-5"
 

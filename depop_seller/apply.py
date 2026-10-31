@@ -10,7 +10,7 @@ from pathlib import Path
 import pillow_heif
 from PIL import Image, ImageOps
 
-from . import db
+from . import config, db
 from .config import OUTPUT_JPEG_QUALITY, OUTPUT_MAX_PX, BatchPaths
 from .manifest import Row, items
 
@@ -48,7 +48,7 @@ def apply_batch(
     names = {r.raw_file: f"{r.item_id}_{r.photo_no}.jpg" for r in kept}
     for i, r in enumerate(kept, 1):
         white = paths.white / f"{r.stem}.jpg"
-        convert(white if white.is_file() else paths.raw / r.raw_file, dst / names[r.raw_file], max_px=max_px)
+        convert(white if config.WHITE_BACKGROUND and white.is_file() else paths.raw / r.raw_file, dst / names[r.raw_file], max_px=max_px)
         if progress:
             progress(i, len(kept))
         if i % 25 == 0 or i == len(kept):
