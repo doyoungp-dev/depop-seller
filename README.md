@@ -5,6 +5,7 @@ the descriptions are written in your own style, and Depop's listing form opens w
 filled in. You check it and press Post.
 
 [![Download for Windows](https://img.shields.io/badge/Download_for_Windows-DepopSellerSetup.exe-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSellerSetup.exe)
+[![Download for Mac](https://img.shields.io/badge/Download_for_Mac-DepopSeller.zip-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSeller.zip)
 
 *For my beloved wife, and for our friends. Enjoy the app!*
 
@@ -31,12 +32,12 @@ copying one folder.
 
 | | Why | Cost |
 |---|---|---|
-| A Windows 10 or 11 PC | the app runs there | - |
+| A Windows 10 or 11 PC, or a Mac (macOS 11 or newer) | the app runs there | - |
 | [Google Chrome](https://www.google.com/chrome/) | the helper that fills in Depop's form lives in Chrome | free |
 | The [Claude desktop app](https://claude.ai/download) with a **Pro or Max** plan | writes the descriptions | your existing subscription |
 | An [Anthropic API key](https://console.anthropic.com) with some credit | sorts photos into items | about $2.50 per 440 photos |
 
-## Install
+## Install on Windows
 
 1. **Download** `DepopSellerSetup.exe` - the button above, or **Releases** on the right of this page.
 2. **Open it.** Windows may say *Windows protected your PC*: click **More info**, then
@@ -56,6 +57,24 @@ Windows **Settings → Apps → Depop Seller → Uninstall** - your data folder 
 unzip it somewhere you will keep it, and double-click `Depop Seller.cmd`. That route needs
 [Python](https://www.python.org/downloads/) 3.12 or newer and sets itself up on first run.
 
+## Install on a Mac
+
+1. **Install Python, once.** Go to [python.org/downloads](https://www.python.org/downloads/), click
+   the yellow **Download Python** button, open the file and click **Continue** through the
+   installer. (If you skip this, the app offers to open that page for you.)
+2. **Download** `DepopSeller.zip` - the Mac button above. Your Mac unzips it into a folder called
+   `depop_seller_app` in Downloads; move that folder somewhere you will keep it, such as Documents.
+3. **Double-click Depop Seller** inside the folder. The first time, macOS says it could not verify
+   the app: click **Done**, open **System Settings → Privacy & Security**, scroll down, click
+   **Open Anyway** next to Depop Seller and confirm. macOS says that about any app that has not
+   paid Apple to be checked - which a free app like this one has not.
+4. It sets itself up - a minute or two, with a notification when it starts and when it is ready -
+   and then opens. Drag it to the Dock to keep it handy.
+5. **Open the Settings tab** and work down it once, exactly as on Windows.
+
+Closing the app window closes the app. To remove it, drag the `depop_seller_app` folder to the
+Trash - your data folder stays where it is.
+
 ## Using it
 
 | Tab | |
@@ -68,7 +87,8 @@ unzip it somewhere you will keep it, and double-click `Depop Seller.cmd`. That r
 
 ## Your data stays yours
 
-Everything of yours lives in one folder, separate from the app: `%USERPROFILE%\DepopSeller` -
+Everything of yours lives in one folder, separate from the app: `%USERPROFILE%\DepopSeller` on
+Windows, `DepopSeller` in your home folder on a Mac -
 your photos and their grouping, your listings and descriptions, your house style and your API key.
 
 The only things that ever leave your computer:
@@ -85,7 +105,8 @@ To use the app on another computer, install it there and copy that one folder ac
 ## Updating
 
 Open **Settings → Check for updates**. If there is a newer version you will see what changed, and
-**Update** installs it - the app closes for a few seconds and reopens by itself. Only the app is
+**Update** installs it - the app closes for a few seconds and reopens by itself (on a Mac it
+closes, and you open it again from the Dock). Only the app is
 replaced: your photos, listings, style and key live in your data folder, which an update never
 touches. The app only contacts GitHub when you press one of those buttons.
 
@@ -97,8 +118,6 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 - **It never posts for you.** The Depop button fills in the form; pressing Post is always yours.
 - **Not affiliated with Depop or Anthropic.** If Depop changes its listing page and the helper
   stops filling it in, please [open an issue](https://github.com/doyoungp-dev/depop_seller/issues).
-- **Windows only, for now.** The code includes macOS launchers, but they have not been tested on a
-  Mac yet.
 
 ---
 
