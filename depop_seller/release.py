@@ -31,7 +31,7 @@ from pathlib import Path
 
 from . import config, installer, share, updates
 
-VERSION_FILES = ("pyproject.toml", "depop_seller/__init__.py", "Depop Seller.app/Contents/Info.plist")
+VERSION_FILES = ("pyproject.toml", "depop_seller/__init__.py", "Depop Seller.app/Contents/Info.plist", "README.md")
 DIST = "dist"                                       # gitignored; the zip is built here
 
 
@@ -87,6 +87,11 @@ def set_version(root: Path, version: str) -> list[str]:
         "Depop Seller.app/Contents/Info.plist": (
             r"(<key>CFBundle(?:ShortVersionString|Version)</key>\s*<string>)[^<]*(</string>)",
             rf"\g<1>{version}\g<2>"),
+        # The download buttons carry the version in their own address. A badge that looks the
+        # version up stayed stale on the project page, because GitHub keeps its own copy of
+        # README images; a new address per release is a picture no cache has seen.
+        "README.md": (r"(https://img\.shields\.io/badge/Download%20for%20(?:Windows|Mac)-)v[0-9.]+(-)",
+                      rf"\g<1>v{version}\g<2>"),
     }
     changed = []
     for name, (pattern, replacement) in rules.items():

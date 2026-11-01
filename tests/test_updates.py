@@ -395,6 +395,9 @@ def test_release_sets_the_version_everywhere_it_lives(tmp_path: Path):
     assert 'version = "7.8.9"' in (tmp_path / "pyproject.toml").read_text()
     plist = (tmp_path / "Depop Seller.app/Contents/Info.plist").read_text()
     assert plist.count("<string>7.8.9</string>") == 2                    # short version and build
+    readme = (tmp_path / "README.md").read_text(encoding="utf-8")
+    for button in ("Windows", "Mac"):                                    # both download buttons show it
+        assert f"https://img.shields.io/badge/Download%20for%20{button}-v7.8.9-" in readme
     assert release.set_version(tmp_path, "7.8.9") == []                  # running it again changes nothing
 
 
