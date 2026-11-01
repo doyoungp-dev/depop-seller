@@ -700,8 +700,9 @@ class ReviewServer:
         cancelled). It is a dialog on the seller's own screen, opened for the seller's own page -
         other sites cannot ask for it, as every POST from another origin is refused."""
         prompts = {
-            "new": "Choose where to keep the new batch. Depop Seller makes a folder with the batch's name inside it.",
-            "import": "Choose a folder of photos to copy into this batch. The photos there are left as they are.",
+            # short: on Windows this is the window's title bar
+            "new": "Choose where to keep the new batch",
+            "import": "Choose a folder of photos to copy into this batch",
         }
         if purpose not in prompts:
             raise ValueError(f"unknown purpose {purpose!r}")

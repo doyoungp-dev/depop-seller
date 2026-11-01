@@ -124,7 +124,11 @@ def test_the_folder_chooser_is_the_system_s_own_on_windows_and_mac(tmp_path: Pat
     prompt = 'Where "here" & there'
     monkeypatch.setattr(desktop.sys, "platform", "win32")
     cmd, extra = desktop.folder_picker_command(prompt, tmp_path)
-    assert cmd[:3] == ["powershell", "-NoProfile", "-STA"] and "FolderBrowserDialog" in cmd[-1]
+    assert cmd[:3] == ["powershell", "-NoProfile", "-STA"]
+    script = cmd[-1]
+    assert "IFileDialog" in script and "d.SetOptions(0x20" in script   # Explorer's Select Folder (pick folders)
+    assert "$owner.TopMost = $true" in script and "$owner.Show()" in script   # shown, or Windows never displays it
+    assert "FolderBrowserDialog" in script                        # the fallback
     assert prompt not in " ".join(cmd)                            # text travels in the environment, not the script
     assert extra["env"]["DEPOP_PICK_PROMPT"] == prompt and extra["env"]["DEPOP_PICK_START"] == str(tmp_path)
 
