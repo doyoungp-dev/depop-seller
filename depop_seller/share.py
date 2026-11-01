@@ -74,8 +74,9 @@ To set up this folder instead, you need, once:
 
 SETTING IT UP - there is nothing to type
 
-  1. Unzip this folder somewhere you will keep it, for example Documents.
-     Do not work inside the zip itself.
+  1. Unzip this folder somewhere you will keep it - on a Mac, drag it into
+     Applications (not Desktop or Documents, which iCloud may sync); on
+     Windows, Documents is fine. Do not work inside the zip itself.
 
   2. WINDOWS   double-click  "Depop Seller.cmd"  in the folder.
      MAC       double-click  "Depop Seller"      in the folder.
@@ -148,10 +149,12 @@ def default_destination() -> Path:
     return folder / f"Depop Seller {date.today():%Y-%m-%d}.zip"
 
 
-def make_share_zip(destination: Path | None = None, files: list[Path] | None = None) -> dict:
+def make_share_zip(destination: Path | None = None, files: list[Path] | None = None,
+                   top: str = "depop_seller_app") -> dict:
     """Write a zip of the app for someone else, and refuse to include anything secret. `files`
     narrows it to a given list - a release passes the files git tracks, so nothing that merely
-    sits in the folder can end up in a download."""
+    sits in the folder can end up in a download. `top` is the one folder everything sits in; keep
+    the default for anything the updater reads (`updates.ZIP_ROOT`)."""
     destination = Path(destination) if destination else default_destination()
     chosen = sorted(f for f in files if f.is_file() and _included(f)) if files is not None else files_to_share()
     for f in chosen:                                   # belt and braces before anything is written
@@ -162,9 +165,9 @@ def make_share_zip(destination: Path | None = None, files: list[Path] | None = N
     now = time.time()
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as z:
         for f in chosen:
-            arc = PurePosixPath("depop_seller_app") / f.relative_to(PROJECT_ROOT).as_posix()
+            arc = PurePosixPath(top) / f.relative_to(PROJECT_ROOT).as_posix()
             _add(z, arc, f.read_bytes(), f.stat().st_mtime)
-        _add(z, PurePosixPath("depop_seller_app") / GUIDE, START_HERE.encode("utf-8"), now)
+        _add(z, PurePosixPath(top) / GUIDE, START_HERE.encode("utf-8"), now)
     size = destination.stat().st_size
     log.info("share copy written: %s (%d files, %.0f KB)", destination, len(chosen) + 1, size / 1024)
     return {"path": str(destination), "files": len(chosen) + 1, "kb": round(size / 1024)}

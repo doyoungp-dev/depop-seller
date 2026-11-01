@@ -413,3 +413,12 @@ def test_release_zip_holds_only_committed_files_and_passes_the_updater(tmp_path:
     assert names == {"depop_seller/__init__.py", "depop_seller/review.py", "README.md", "START HERE.txt"}
     with pytest.raises(release.ReleaseError, match="expected 2.0.0"):
         release.build_zip(project, tracked, "2.0.0")
+
+    # the Mac download: the same files, in a folder Mac users see as "Depop Seller" - while the
+    # updater's zip keeps the folder name every installed copy checks for
+    mac_zip = release.build_mac_zip(project, tracked, zip_path)
+    assert mac_zip.name == "DepopSeller-Mac.zip"
+    mac_names = zipfile.ZipFile(mac_zip).namelist()
+    assert {n.split("/", 1)[0] for n in mac_names} == {"Depop Seller"}
+    assert {n.split("/", 1)[1] for n in mac_names} == names
+    assert {n.split("/", 1)[0] for n in zipfile.ZipFile(zip_path).namelist()} == {updates.ZIP_ROOT}

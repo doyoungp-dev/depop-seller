@@ -7,8 +7,9 @@
 In order: the checkout must be clean and on main; GitHub must be reachable, signed in, public, and
 hold the same history as this checkout; the tests must pass. Then the version is written into the
 three files that carry it and committed, `DepopSeller.zip` is built from the committed files only
-and checked exactly the way the app's updater will check it, the tag and main are pushed, and the
-GitHub release is created with the zip attached. From then on every copy of the app finds it under
+and checked exactly the way the app's updater will check it, `DepopSeller-Mac.zip` holds the same
+files in a "Depop Seller" folder for the Mac download button, the tag and main are pushed, and the
+GitHub release is created with both zips and the Windows installer attached. From then on every copy of the app finds it under
 Settings -> Check for updates.
 
 Every step can be run again after a failure: the commit, the tag and the pushes are only made when
@@ -27,12 +28,15 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from pathlib import Path
 
 from . import config, installer, share, updates
 
 VERSION_FILES = ("pyproject.toml", "depop_seller/__init__.py", "Depop Seller.app/Contents/Info.plist", "README.md")
 DIST = "dist"                                       # gitignored; the zip is built here
+MAC_ASSET = "DepopSeller-Mac.zip"                   # what the README's Mac button downloads
+MAC_FOLDER = "Depop Seller"                         # the folder a Mac user sees once it unzips
 
 
 class ReleaseError(RuntimeError):
@@ -131,6 +135,22 @@ def build_zip(root: Path, tracked: list[str], expect: str) -> Path:
     return dest
 
 
+def build_mac_zip(root: Path, tracked: list[str], update_zip: Path) -> Path:
+    """DepopSeller-Mac.zip: the same files as DepopSeller.zip, in a folder called "Depop Seller",
+    which is what a Mac user sees when the download unzips. DepopSeller.zip itself keeps its
+    `depop_seller_app/` folder: every installed copy's updater refuses a zip without it."""
+    dest = root / DIST / MAC_ASSET
+    dest.unlink(missing_ok=True)
+    share.make_share_zip(dest, files=[root / name for name in tracked if name], top=MAC_FOLDER)
+
+    def inside(path: Path, top: str) -> set[str]:
+        return {n.removeprefix(top + "/") for n in zipfile.ZipFile(path).namelist()}
+
+    if inside(dest, MAC_FOLDER) != inside(update_zip, updates.ZIP_ROOT):
+        raise ReleaseError(f"{MAC_ASSET} does not hold the same files as {updates.ASSET_NAME}")
+    return dest
+
+
 # ---- the whole thing ------------------------------------------------------------------------
 
 def release(version: str | None = None, *, notes: str | None = None, dry_run: bool = False,
@@ -212,6 +232,8 @@ def release(version: str | None = None, *, notes: str | None = None, dry_run: bo
         tracked = _run(git, "ls-files", "-z", root=root).split(chr(0))
         zip_path = build_zip(root, tracked, current)
         say(f"Built {zip_path} ({zip_path.stat().st_size // 1024} KB) from {len([t for t in tracked if t])} tracked files; the updater accepts it")
+        mac_zip = build_mac_zip(root, tracked, zip_path)
+        say(f"Built {mac_zip} - the same files, in a \"{MAC_FOLDER}\" folder")
         setup = None
         if installer.find_iscc() is not None:
             say("Building the Windows installer")
@@ -236,6 +258,7 @@ def release(version: str | None = None, *, notes: str | None = None, dry_run: bo
     say("Building the zip")
     tracked = _run(git, "ls-files", "-z", root=root).split(chr(0))
     zip_path = build_zip(root, tracked, version)
+    mac_zip = build_mac_zip(root, tracked, zip_path)
     say("Building the Windows installer")
     try:
         setup = installer.build(root, zip_path, version, say=say)
@@ -257,7 +280,7 @@ def release(version: str | None = None, *, notes: str | None = None, dry_run: bo
     with tempfile.TemporaryDirectory() as tmp:
         notes_file = Path(tmp) / "notes.md"
         notes_file.write_text(notes + chr(10), encoding="utf-8")
-        url = _run(gh, "release", "create", tag, str(setup), str(zip_path), "--repo", updates.REPO, "--verify-tag",
+        url = _run(gh, "release", "create", tag, str(setup), str(zip_path), str(mac_zip), "--repo", updates.REPO, "--verify-tag",
                    "--title", f"Depop Seller {version}", "--notes-file", str(notes_file), root=root)
     say(f"Released {version}: {url}")
     return {"version": version, "zip": str(zip_path), "setup": str(setup), "url": url, "problems": []}

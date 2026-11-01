@@ -5,7 +5,7 @@ the descriptions are written in your own style, and Depop's listing form opens w
 filled in. You check it and press Post.
 
 [![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-v1.1.2-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSellerSetup.exe)
-[![Download for Mac](https://img.shields.io/badge/Download%20for%20Mac-v1.1.2-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSeller.zip)
+[![Download for Mac](https://img.shields.io/badge/Download%20for%20Mac-v1.1.2-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSeller-Mac.zip)
 
 *For my beloved wife, and for our friends. Enjoy the app!*
 
@@ -65,18 +65,20 @@ on first run.
    from python.org, open it and click **Continue** through it. Use this link rather than the
    newest Python on python.org's front page: Python 3.15 does not work with Depop Seller yet.
    (If you skip this, the app offers to download it for you.)
-2. **Download** `DepopSeller.zip` - the Mac button above. Your Mac unzips it into a folder called
-   `depop_seller_app` in Downloads; move that folder somewhere you will keep it, such as Documents.
-3. **Double-click Depop Seller** inside the folder. The first time, macOS says it could not verify
+2. **Download** `DepopSeller-Mac.zip` - the Mac button above - and double-click it in Downloads if
+   your browser has not unzipped it already. You get a folder called **Depop Seller**.
+3. **Drag the Depop Seller folder into Applications** (in the Finder sidebar). Not Desktop or
+   Documents: on many Macs iCloud syncs those, and the app's folder is not something to sync.
+4. **Double-click Depop Seller** inside that folder. The first time, macOS says it could not verify
    the app: click **Done**, open **System Settings → Privacy & Security**, scroll down, click
    **Open Anyway** next to Depop Seller and confirm. macOS says that about any app that has not
    paid Apple to be checked - which a free app like this one has not.
-4. It sets itself up - a minute or two, with a notification when it starts and when it is ready -
+5. It sets itself up - a minute or two, with a notification when it starts and when it is ready -
    and then opens. Drag it to the Dock to keep it handy.
-5. **Open the Settings tab** and work down it once, exactly as on Windows.
+6. **Open the Settings tab** and work down it once, exactly as on Windows.
 
-Closing the app window closes the app. To remove it, drag the `depop_seller_app` folder to the
-Trash - your data folder stays where it is.
+Closing the app window closes the app. To remove it, drag the **Depop Seller** folder from
+Applications to the Trash - your data folder stays where it is.
 
 ## Using it
 
