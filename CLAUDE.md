@@ -25,6 +25,32 @@ Step 2 (done): a Sell page whose per-item Depop button opens Depop's listing for
 - **Python 3.12-3.14 only, not 3.15 (since 2026-10-31).** `onnxruntime` (White Background, which stays switched off) has no wheel for 3.15, and with no sdist either pip fails the whole install - and python.org's front-page button now hands out 3.15. So every setup path refuses 3.15 and points at the 3.14.10 installer by direct link: the Mac launcher and `setup.sh` (`(3, 12) <= version <= (3, 14)`), `setup.ps1` (asks the `py` launcher for `-3.14`/`-3.13`/`-3.12`, since plain `py` runs the newest), the README and the zip's `START HERE.txt`. The Windows installer is unaffected (it bundles the release machine's 3.14). Lift the cap - all five places - once onnxruntime publishes cp315 wheels for macOS arm64 and Windows, or if onnxruntime is dropped from the dependencies.
 - Raw photos are iPhone `.HEIC` (square, ~4284×4284). Decoding needs `pillow-heif` (`pillow_heif.register_heif_opener()`).
 
+## Check on a Mac
+
+Features are built on Windows and checked on the MacBook afterwards. CI runs every test on a real Mac,
+but it cannot see the screen - a system window that never appears, a permission prompt, the app icon,
+setup, Gatekeeper or a download can only be confirmed by a person at a Mac. This list is how the two
+machines hand that over; an empty list means the Mac side is fully checked.
+
+- **On Windows:** when a change is visible or clickable on a Mac in a way the tests cannot prove (system
+  dialogs, Finder / Trash, `desktop.py`, the `.app` bundle, `setup.sh`, the updater, the downloads), add a
+  line here in the same commit: what to click, what should happen, the code concerned, and the version
+  it first shipped in. Pure logic and page content need no line - CI covers them.
+- **On the MacBook:** after `git pull`, work through the list with the owner: say what to click, check
+  what can be checked directly, fix anything that does not work, delete each line once it works (with a
+  short note in the commit message), and push.
+- **Before a release (Windows):** if an unchecked line covers a change going into the release, say so
+  before publishing. The owner decides; a change that only touches Windows code need not wait.
+
+- [ ] **Batches → Choose folder…**: Finder's folder window opens *in front of* the app (on Windows the
+  first version's window existed but never showed - check it really appears); picking a folder makes
+  "Save in:" show it, and Create batch makes the folder there. (`desktop.folder_picker_command`, the
+  `osascript` `choose folder` branch) - shipped in 1.1.5
+- [ ] **Batches → Delete batch → Continue**: the batch's folder lands in the Trash and the card goes; if
+  macOS asks to let Depop Seller control Finder (the fallback when moving into `~/.Trash` is refused),
+  allowing it works, and the warning's wording ("the Trash") is right. (`desktop.move_to_trash`, darwin
+  branch) - shipped in 1.1.5
+
 ## Data layout
 
 **Two folders, kept apart** (`config.py`): the **app folder** (`PROJECT_ROOT`) is the software and
