@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Depop Seller helper",
-  "version": "1.3",
+  "version": "1.4",
   "description": "Adds an item's photos from the local Depop Seller app to Depop's 'List an item' form, and reads what you are selling and have sold for the app's Shop tab. Runs in your own Chrome; never posts.",
   "permissions": ["storage"],
   "host_permissions": ["http://127.0.0.1:8765/*", "http://localhost:8765/*"],

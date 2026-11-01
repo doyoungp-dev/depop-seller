@@ -199,8 +199,11 @@ async function readSelling(progress) {
   return out;
 }
 
-async function readSold(progress) {
+// Newest sales come first. With `since` (from the app: it already holds the older sales, and
+// their state no longer moves) reading stops once a page reaches back past it.
+async function readSold(progress, since) {
   const out = [];
+  const stop = since ? new Date(since).getTime() : NaN;
   let after = '';
   for (let page = 0; page < 2000; page++) {
     const body = await depopGet('/presentation/api/v1/receipts/?role=seller&limit=12' + (after ? '&after=' + encodeURIComponent(after) : ''));
@@ -209,6 +212,8 @@ async function readSold(progress) {
     progress(out.length);
     const info = body.page_info || {};
     if (!receipts.length || !info.has_more || !info.last) break;
+    const oldest = new Date(receipts[receipts.length - 1].sold_timestamp).getTime();
+    if (!isNaN(stop) && oldest < stop) break;
     after = info.last;
     await pause(250);
   }
@@ -223,7 +228,10 @@ async function shopSync(job) {
       report.selling = await readSelling((n) => banner(`reading what you are selling… ${n}`));
       try { report.counts = await depopGet('/presentation/api/v1/users/me/product-counts/'); } catch (e) { /* only a cross-check */ }
     }
-    if (job.what !== 'selling') report.sold = await readSold((n) => banner(`reading what you have sold… ${n}`));
+    if (job.what !== 'selling') {
+      report.sold = await readSold((n) => banner(`reading what you have sold… ${n}`), job.since);
+      if (job.since) report.sold_since = job.since;   // tells the app to keep the older sales it has
+    }
   } catch (e) {
     report.error = String((e && e.message) || e);
   }

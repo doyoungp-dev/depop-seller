@@ -55,7 +55,8 @@ Routes:
   GET  /shop                  the Shop page (static/shop.html): what is selling and what has sold on Depop
   GET  /shop/state            both lists as last read, with totals worked out now (shop.state)
   POST /shop/request          {"what": "selling"|"sold"|"both"} -> a one-time pass for the Chrome helper
-  POST /shop/import           from depop.com only: {token, selling?, sold?, counts?, error?} - what the helper read
+  POST /shop/import           from the helper only: {token, selling?, sold?, sold_since?, counts?, error?} - what it read
+  GET  /shop/export?list=     selling|sold as last refreshed, as a CSV download (no pictures)
   POST /batches/open          {"name"} -> opens the batch's raw_image folder in Explorer / Finder
   GET  /sell                  the selling page (static/sell.html)
   GET  /sell/state?batch=     items with photos + listing status/description from the DB (synced from the manifest)
@@ -1171,6 +1172,21 @@ class ReviewHandler(BaseHTTPRequestHandler):
             elif path == "/shop/state":
                 from . import shop
                 self._json(shop.state() | {"refreshing": self.server_state.shop_requests.running()})
+            elif path == "/shop/export":
+                from . import shop
+                kind = (parse_qs(urlsplit(self.path).query).get("list") or [""])[0]
+                try:
+                    name, body = shop.export_csv(kind)
+                except ValueError as e:
+                    self._text(str(e), HTTPStatus.BAD_REQUEST)
+                    return
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "text/csv; charset=utf-8")
+                self.send_header("Content-Disposition", f'attachment; filename="{name}"')   # Chrome saves it to Downloads
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
             elif path == "/style":
                 page = (files("depop_seller") / "static" / "style.html").read_bytes()
                 self._send(HTTPStatus.OK, page, "text/html; charset=utf-8")

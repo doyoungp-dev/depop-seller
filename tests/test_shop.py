@@ -151,8 +151,74 @@ def test_the_helper_reads_the_lists_without_buyers_and_matches_the_app_s_version
     # nor does the Depop button's tab: photos, description and "opened" go through the background script
     assert "fetch(`${server}" not in js and "/sell/photos" not in js and "/sell/item" not in js
     assert "type: 'sell-photos'" in js and "type: 'sell-opened'" in js
+    assert "report.sold_since = job.since" in js                           # a shorter sold read says so
+    assert "since: since || null" in (root / "chrome_extension" / "sell_page.js").read_text(encoding="utf-8")
     bg = (root / "chrome_extension" / "background.js").read_text(encoding="utf-8")
     assert "/shop/import" in bg and "8765" in bg                           # only the app's own address
     assert "/sell/photos" in bg and "/sell/item" in bg and "startsWith(msg.server + '/')" in bg
     page = (root / "depop_seller" / "static" / "shop.html").read_text(encoding="utf-8")
     assert "depop-seller:shop-sync" in page and "/shop/request" in page
+
+
+def test_a_refresh_reads_only_the_recent_sales_and_keeps_the_older_ones(tmp_path: Path, monkeypatch):
+    from datetime import timezone
+    monkeypatch.setattr(config, "DB_PATH", tmp_path / "shop.db")
+    utc = lambda *a: datetime(*a, tzinfo=timezone.utc)
+    march = {**SOLD[1], "purchase_id": 10, "status": "completed", "sold_timestamp": "2026-03-01T10:00:00Z"}
+    gone = {**SOLD[1], "purchase_id": 9, "sold_timestamp": "2026-10-01T10:00:00Z"}
+    assert shop.Requests().start("sold")["since"] is None                  # nothing kept yet: read every sale
+
+    shop.import_lists({"what": "sold"}, {"sold": SOLD + [gone, march]}, now=utc(2026, 10, 31))
+    since = shop.sold_since(now=utc(2026, 11, 5))
+    assert since == "2026-08-07T00:00:00Z"                                  # the last 90 days are read again
+    assert shop.sold_since(now=utc(2026, 12, 15)) is None                   # a month on: every sale again
+
+    # the helper read back to `since`: a new sale, one that has shipped, and one Depop no longer lists
+    fresh = [{**SOLD[0], "purchase_id": 14, "sold_timestamp": "2026-11-04T09:00:00Z"},
+             {**SOLD[0], "status": "shipped"}, SOLD[1]]
+    shop.import_lists({"what": "sold", "since": since}, {"sold": fresh, "sold_since": since}, now=utc(2026, 11, 5))
+    snap = shop.load()["sold"]
+    assert [s["id"] for s in snap["items"]] == [14, 11, 12, 10]             # March kept, the vanished one gone
+    assert snap["items"][1]["status"] == "shipped" and snap["checked_from"] == since
+    assert snap["full_at"] == "2026-10-31T00:00:00Z"                        # still the last full read
+
+    # an older helper reads every sale and does not say `sold_since`: that is a full read
+    shop.import_lists({"what": "sold", "since": since}, {"sold": SOLD}, now=utc(2026, 11, 6))
+    snap = shop.load()["sold"]
+    assert [s["id"] for s in snap["items"]] == [11, 12] and snap["full_at"] == "2026-11-06T00:00:00Z"
+    assert snap["checked_from"] is None
+
+
+def test_each_list_exports_as_a_spreadsheet_file(server):
+    def get(path):
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{server}{path}") as r:
+                return r.status, r.headers, r.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, e.read()
+
+    assert get("/shop/export?list=sold")[0] == 400                         # nothing read yet
+    assert get("/shop/export?list=everything")[0] == 400
+    formula = {**SELLING[1], "id": 3, "description": "=HYPERLINK(1)"}
+    refund = {**SOLD[0], "purchase_id": 13, "status": "refunded"}
+    token = _call(server, "/shop/request", {"what": "both"})[1]["token"]
+    _call(server, "/shop/import", {"token": token, "selling": SELLING + [formula], "sold": SOLD + [refund]},
+          origin="https://www.depop.com")
+
+    status, headers, body = get("/shop/export?list=selling")
+    assert status == 200 and headers["Content-Type"].startswith("text/csv")
+    assert re.fullmatch(r'attachment; filename="Depop selling \d{4}-\d{2}-\d{2}\.csv"', headers["Content-Disposition"])
+    assert body.startswith(b"\xef\xbb\xbf")                                 # Excel then reads it as UTF-8
+    import csv
+    rows = list(csv.DictReader(body.decode("utf-8-sig").splitlines()))
+    top = next(r for r in rows if r["Depop ID"] == "1")
+    assert (top["Title"], top["Price"], top["Original price"], top["Sizes"], top["Likes"]) == \
+        ("Vintage Y2K top in red", "32.00", "40.00", "M", "7")
+    assert top["Link"] == "https://www.depop.com/products/shop-y2k-top-red/" and "picture" not in body.decode()
+    assert next(r for r in rows if r["Depop ID"] == "3")["Title"] == "'=HYPERLINK(1)"   # never run as a formula
+
+    rows = list(csv.DictReader(get("/shop/export?list=sold")[2].decode("utf-8-sig").splitlines()))
+    assert len(rows) == 3 and {r["Sale ID"]: r["Counted in totals"] for r in rows} == {"11": "Yes", "12": "Yes", "13": "No"}
+    bundle = next(r for r in rows if r["Sale ID"] == "12")
+    assert (bundle["Items"], bundle["Number of items"], bundle["Bundle"], bundle["You received"]) == ("Skirt + Belt", "2", "Yes", "44.00")
+    assert "someone" not in str(rows)                                       # no buyer, as on the page

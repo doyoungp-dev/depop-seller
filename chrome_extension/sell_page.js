@@ -13,8 +13,8 @@ window.addEventListener('message', (event) => {
     });
   }
   if (event.data.type === 'depop-seller:shop-sync') {
-    const { token, what, server } = event.data;
-    chrome.storage.local.set({ shopJob: { token, what, server, at: Date.now() } }, () => {
+    const { token, what, server, since } = event.data;
+    chrome.storage.local.set({ shopJob: { token, what, server, since: since || null, at: Date.now() } }, () => {
       chrome.runtime.sendMessage({ type: 'open-shop-tab' });
       window.postMessage({ type: 'depop-seller:shop-started', what }, '*');
     });

@@ -17,21 +17,32 @@ sign-in token never leaves Chrome.
 
 This module turns those picked fields into what the Shop tab shows, works out the totals, and
 keeps one snapshot per list in the database, so the tab shows the last refresh straight away.
+
+The sold list only grows, so a Refresh does not read all of it every time: sales from the last
+`RECHECK_DAYS` are read again (their state still moves - shipped, delivered, now and then a
+refund) and older ones are kept from the last refresh. Every sale is read again when the last full
+read is more than `FULL_EVERY_DAYS` old, so a late change is caught within a month. The selling
+list is read whole every time: a listing anywhere in it can be edited, sold or deleted, and it is
+bounded by what is for sale now, not by everything ever sold.
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import secrets
 import time
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from . import db
 
 KINDS = ("selling", "sold")
 REQUEST_TTL_S = 10 * 60          # how long a Refresh may take before its pass expires
 MAX_ITEMS = 20000                # far beyond any shop; a sanity cap on what is accepted
+RECHECK_DAYS = 90                # sales younger than this are read again on every Refresh
+FULL_EVERY_DAYS = 30             # and every sale at least this often
 
 # Depop's receipt states, as a seller would say them.
 STATUS_LABELS = {
@@ -171,6 +182,35 @@ def sold_totals(sales: list[dict], now: datetime | None = None) -> dict:
     }
 
 
+def _when(stamp) -> datetime | None:
+    """A Depop (UTC, `Z`) or app (this computer's clock) time stamp as an aware datetime."""
+    try:
+        when = datetime.fromisoformat(str(stamp or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.astimezone()
+
+
+def _utc(when: datetime) -> str:
+    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def sold_since(now: datetime | None = None) -> str | None:
+    """Where a Refresh of the sold list may stop reading, or None to read every sale."""
+    snap = load().get("sold")
+    if not snap or not snap.get("items"):
+        return None                               # nothing kept to fill in the older sales
+    now = now or datetime.now(timezone.utc)
+    full_at = _when(snap.get("full_at"))
+    if full_at is None or now - full_at > timedelta(days=FULL_EVERY_DAYS):
+        return None
+    newest = max((w for w in (_when(s.get("sold_at")) for s in snap["items"]) if w), default=None)
+    if newest is None:
+        return None
+    # never later than the newest sale kept: anything sold after the last refresh is always read
+    return _utc(min(now - timedelta(days=RECHECK_DAYS), newest))
+
+
 def _local_month(stamp: str) -> str:
     """The calendar month a sale fell in on this computer's clock (Depop sends UTC)."""
     try:
@@ -194,9 +234,10 @@ class Requests:
         if what not in ("selling", "sold", "both"):
             raise ValueError(f"unknown list {what!r}")
         token = secrets.token_urlsafe(18)
+        since = sold_since() if what != "selling" else None
         self.pending = {k: v for k, v in self.pending.items() if time.monotonic() - v["at"] < REQUEST_TTL_S}
-        self.pending[token] = {"what": what, "at": time.monotonic()}
-        return {"token": token, "what": what}
+        self.pending[token] = {"what": what, "at": time.monotonic(), "since": since}
+        return {"token": token, "what": what, "since": since}
 
     def take(self, token: str) -> dict:
         job = self.pending.pop(str(token or ""), None)
@@ -235,9 +276,11 @@ def load(conn=None) -> dict:
     return out
 
 
-def import_lists(job: dict, body: dict) -> dict:
+def import_lists(job: dict, body: dict, now: datetime | None = None) -> dict:
     """Store what the helper read. An `error` from the helper is kept with the old list, so the
-    tab can say what went wrong without losing what it showed before."""
+    tab can say what went wrong without losing what it showed before. A sold list read only back
+    to the pass's `since` (the helper says so with `sold_since`) is completed with the older sales
+    from the last refresh."""
     what = job["what"]
     kinds = KINDS if what == "both" else (what,)
     error = str(body.get("error") or "").strip()[:300]
@@ -261,8 +304,19 @@ def import_lists(job: dict, body: dict) -> dict:
             data = {"items": rows, "expected": counts.get("selling") if isinstance(counts.get("selling"), int) else None}
         else:
             rows = [sold_item(r) for r in raw if isinstance(r, dict)]
+            since = job.get("since")
+            prev = old.get("sold") or {}
+            if since and body.get("sold_since") == since:
+                cut, seen = _when(since), {r["id"] for r in rows}
+                for r in prev.get("items") or []:
+                    when = _when(r.get("sold_at"))
+                    if r.get("id") not in seen and (when is None or when < cut):
+                        rows.append(r)
+                full_at = prev.get("full_at")
+            else:                                 # every sale was read (or an older helper read them all)
+                since, full_at = None, _utc(now or datetime.now(timezone.utc))
             rows.sort(key=lambda r: r["sold_at"], reverse=True)
-            data = {"items": rows}
+            data = {"items": rows, "full_at": full_at, "checked_from": since}
         save(kind, {**data, "error": None, "items_from": None})
         stored[kind] = len(rows)
     return {"stored": stored, "error": error or None}
@@ -279,3 +333,54 @@ def state(now: datetime | None = None) -> dict:
         totals = selling_totals(items) if kind == "selling" else sold_totals(items, now)
         out[kind] = {**snap, "totals": totals}
     return out
+
+
+# ---- spreadsheet export -------------------------------------------------------------------
+
+def _cell(value) -> str:
+    """Text as a spreadsheet will take it literally: a cell starting with = + @ would be read as
+    a formula by Excel or Sheets."""
+    text = str(value if value is not None else "")
+    return "'" + text if text[:1] in ("=", "+", "@", chr(9), chr(13)) else text
+
+
+def _amount(value) -> str:
+    return "" if value is None else f"{value:.2f}"
+
+
+def _local_time(stamp: str) -> str:
+    when = _when(stamp)
+    return when.astimezone().strftime("%Y-%m-%d %H:%M") if when else str(stamp or "")
+
+
+def export_csv(kind: str, today: datetime | None = None) -> tuple[str, bytes]:
+    """The list as last refreshed, one row per listing or per sale, as a CSV file name and its
+    bytes. UTF-8 with a byte-order mark, so Excel shows accents and emoji instead of mojibake."""
+    if kind not in KINDS:
+        raise ValueError(f"unknown list {kind!r}")
+    snap = load().get(kind)
+    items = (snap or {}).get("items") or []
+    if not items:
+        raise ValueError("there is nothing to export yet - press Refresh first")
+    out = io.StringIO()
+    w = csv.writer(out)
+    if kind == "selling":
+        w.writerow(["Title", "Price", "Original price", "Currency", "Shipping", "Sizes", "Likes",
+                    "Listed", "Last updated", "Link", "Depop ID"])
+        for it in items:
+            w.writerow([_cell(it.get("title")), _amount(it.get("price")), _amount(it.get("full_price")),
+                        it.get("currency") or "", _amount(it.get("shipping")), _cell(", ".join(it.get("sizes") or [])),
+                        it.get("likes", 0), it.get("listed") or "", it.get("updated") or "", it.get("url") or "",
+                        it.get("id") or ""])
+    else:
+        w.writerow(["Sold on", "Status", "Counted in totals", "Items", "Number of items", "Bundle",
+                    "Sale price", "You received", "Currency", "Sale ID"])
+        for s in items:
+            lines = s.get("items") or []
+            w.writerow([_local_time(s.get("sold_at") or s.get("date")), s.get("status_label") or "",
+                        "No" if s.get("status") in NOT_INCOME else "Yes",
+                        _cell(" + ".join(i.get("title") or "" for i in lines)), max(1, len(lines)),
+                        "Yes" if s.get("bundle") else "No", _amount(s.get("price")), _amount(s.get("earned")),
+                        s.get("currency") or "", s.get("id") or ""])
+    day = (today or datetime.now()).strftime("%Y-%m-%d")
+    return f"Depop {kind} {day}.csv", out.getvalue().encode("utf-8-sig")
