@@ -84,7 +84,7 @@ Applications to the Trash - your data folder stays where it is.
 
 | Tab | |
 |---|---|
-| **Batches** | Name a batch - a date, "Autumn knits", anything - and, with the folder button next to the name, choose where it is kept: the usual place, the Desktop, Downloads, an external drive. Drop its photos on it (or put them in its folder later), press **Group with Claude**. |
+| **Batches** | Name a batch - a date, "Autumn knits", anything - and, with the folder button next to the name, choose where it is kept: the usual place, the Desktop, Downloads, an external drive. Drop its photos on it (or put them in its folder later), press **Group with Claude**. **Delete batch** asks first, then moves the batch's folder to the Recycle Bin (Trash on a Mac). |
 | **Review** | Drag photos between items and into order. Delete what you don't want; nothing on disk is ever deleted. |
 | **Sell** | Type a line of facts per item, tick items, **Generate Selected Descriptions**. Then **Depop** on each item. Tick **Listed** once it's posted. |
 | **Style** | Tell Claude how descriptions should change, see exactly what changes, accept or discard. Every version is kept. |

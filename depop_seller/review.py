@@ -49,6 +49,7 @@ Routes:
   POST /batches/new           {"name", "location"?} -> creates <location or product_image>/<name>/raw_image
   POST /batches/choose-folder {"purpose": "new"|"import", "start"?} -> the system's folder chooser: {"folder"|null}
   POST /batches/forget        {"name"} -> takes a batch kept elsewhere off the list (nothing on disk changes)
+  POST /batches/delete        {"name"} -> the batch folder goes to the Recycle Bin / Trash, its rows leave the DB
   POST /batches/open          {"name"} -> opens the batch's raw_image folder in Explorer / Finder
   GET  /sell                  the selling page (static/sell.html)
   GET  /sell/state?batch=     items with photos + listing status/description from the DB (synced from the manifest)
@@ -659,6 +660,7 @@ class ReviewServer:
                 "extension_dir": str(config.PROJECT_ROOT / "chrome_extension"),
                 "product_image_dir": str(config.PRODUCT_IMAGE_DIR),
                 "new_batch_location": str(config.last_batch_location()),
+                "platform": {"win32": "windows", "darwin": "mac"}.get(sys.platform, "linux"),
                 "missing": [{"name": n, "folder": str(p)} for n, p in sorted(config.missing_batches().items())]}
 
     def _name_taken(self, name: str) -> bool:
@@ -720,6 +722,35 @@ class ReviewServer:
         config.forget_batch(name)
         self.sessions.pop(name, None)
         return {"forgotten": name}
+
+    def delete_batch(self, name: str) -> dict:
+        """Delete a batch: its whole folder goes to the Recycle Bin / Trash (photos, grouping,
+        cut-outs, exports), and its items and descriptions leave the database. The page asks first;
+        this refuses while anything is still working on the batch."""
+        paths = batch_paths(name)
+        if not config.is_batch_folder(paths.root) or _same_place_key(paths.root) in {
+                _same_place_key(config.PRODUCT_IMAGE_DIR), _same_place_key(config.DATA_DIR), _same_place_key(Path.home())}:
+            raise ValueError(f"{paths.root} is not a batch folder - nothing was deleted")
+        with self.lock:
+            busy = (self.group_state.get(paths.batch, {}).get("running")
+                    or self.white_state.get(paths.batch, {}).get("running")
+                    or any(d.get("running") for d in self.describe_state.get(paths.batch, {}).values())
+                    or (paths.batch in self.sessions and self.sessions[paths.batch].apply_state["running"]))
+            if busy:
+                raise RuntimeError(f"{paths.batch} is still being worked on - delete it once that has finished")
+            where = desktop.move_to_trash(paths.root)
+            for state in (self.sessions, self.group_state, self.white_state, self.describe_state):
+                state.pop(paths.batch, None)
+        config.forget_batch(paths.batch)
+        conn = db.connect()
+        try:
+            with conn:
+                conn.execute("DELETE FROM photos WHERE batch = ?", (paths.batch,))
+                conn.execute("DELETE FROM items WHERE batch = ?", (paths.batch,))
+        finally:
+            conn.close()
+        log.info("deleted batch %s: %s moved to %s", paths.batch, paths.root, where)
+        return {"deleted": paths.batch, "folder": str(paths.root), "where": where}
 
     def rename_batch(self, name: str, to: str) -> dict:
         """Rename a batch folder where it lives and carry its rows in the DB across."""
@@ -1207,6 +1238,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
             elif path == "/batches/choose-folder":
                 body = self._body()
                 self._json(self.server_state.choose_folder(str(body.get("purpose") or "new"), body.get("start")))
+            elif path == "/batches/delete":
+                self._json(self.server_state.delete_batch(str(self._body().get("name") or "")))
             elif path == "/batches/forget":
                 self._json(self.server_state.forget_batch(str(self._body().get("name") or "")))
             elif path == "/batches/open":

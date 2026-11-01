@@ -80,6 +80,17 @@
   <div id="batches"></div>
 </main>
 <input type="file" id="file-input" multiple accept=".heic,.heif,.jpg,.jpeg,.png,.webp" hidden>
+<dialog class="confirm" id="del-dialog" aria-labelledby="del-title">
+  <h2 id="del-title"><span class="sign" aria-hidden="true">!</span><span>Delete <span id="del-name"></span>?</span></h2>
+  <p>If you click <b>Continue</b>, this folder will be deleted, with everything in it:</p>
+  <code id="del-folder"></code>
+  <ul id="del-what"></ul>
+  <p id="del-where"></p>
+  <div class="row">
+    <button id="del-cancel">Cancel</button>
+    <button class="danger-solid" id="del-continue">Continue - delete the folder</button>
+  </div>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -236,7 +247,9 @@ function batchCard(b) {
   rename.onclick = () => renameBatch(b);
   const open = el('button', '', 'Open folder');
   open.onclick = () => post('/batches/open', { name: b.name });
-  more.append(fromFolder, rename, open);
+  const del = el('button', 'danger', 'Delete batch');
+  del.onclick = () => askToDelete(b);
+  more.append(fromFolder, rename, open, del);
   tools.append(main, more);
   card.appendChild(tools);
 
@@ -379,6 +392,38 @@ async function pollGroup(name, button, fill, note) {
   note.textContent = 'Grouped' + (st.cost ? ` (about $${st.cost.toFixed(2)})` : '') + ' - opening the review page…';
   location.href = '/?batch=' + encodeURIComponent(name);
 }
+
+// ---- deleting ----------------------------------------------------------------------
+// Never on one click: a warning says exactly which folder goes and what is in it, Cancel has the
+// focus (so Enter or Esc keeps everything), and only Continue deletes. The folder goes to the
+// Recycle Bin / Trash, so even that can be undone there.
+let DELETING = null;
+
+function askToDelete(b) {
+  DELETING = b;
+  $('del-name').textContent = '"' + b.name + '"';
+  $('del-folder').textContent = b.folder;
+  const what = $('del-what');
+  what.innerHTML = '';
+  what.appendChild(el('li', null, b.photos ? `all ${b.photos} photo${b.photos === 1 ? '' : 's'} in it` : 'its photo folder (empty)'));
+  if (b.has_manifest) what.appendChild(el('li', null, `the grouping into ${b.items} item${b.items === 1 ? '' : 's'}, and the descriptions written for them`));
+  if (b.listed) what.appendChild(el('li', null, `the record of which ${b.listed} item${b.listed === 1 ? ' is' : 's are'} listed on Depop (your Depop listings themselves stay)`));
+  const bin = (INFO.platform === 'mac') ? 'the Trash' : 'the Recycle Bin';
+  $('del-where').textContent = `It goes to ${bin}, so if you change your mind you can still get it back from there.`;
+  $('del-continue').disabled = false;
+  $('del-dialog').showModal();
+  $('del-cancel').focus();
+}
+
+$('del-cancel').onclick = () => $('del-dialog').close();
+$('del-continue').onclick = async () => {
+  const b = DELETING;
+  if (!b) return;
+  $('del-continue').disabled = true;
+  const r = await post('/batches/delete', { name: b.name });
+  $('del-dialog').close();
+  if (r) { await load(); say(`Deleted "${r.deleted}" - its folder is in ${r.where}.`); }
+};
 
 // ---- naming ------------------------------------------------------------------------
 

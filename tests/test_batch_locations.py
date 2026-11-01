@@ -197,3 +197,98 @@ def test_choosing_a_place_from_the_page(batch, desk: Path, monkeypatch):
     finally:
         srv.shutdown()
         srv.server_close()
+
+
+def _trash_into(tmp_path: Path):
+    """A stand-in for the Recycle Bin: the folder really leaves its place, into tmp_path/bin."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir(exist_ok=True)
+
+    def move(path):
+        shutil.move(str(path), str(bin_ / Path(path).name))
+        return "the Recycle Bin"
+    return bin_, move
+
+
+def test_deleting_a_batch_removes_its_folder_and_its_rows(batch, desk: Path, tmp_path: Path, monkeypatch):
+    from depop_seller import db
+    from depop_seller.group import decisions_to_rows, group_local
+    from depop_seller.manifest import write_manifest
+    from depop_seller.scan import scan_batch
+
+    bin_, move = _trash_into(tmp_path)
+    monkeypatch.setattr(desktop, "move_to_trash", move)
+    server = ReviewServer()
+    photos = scan_batch(batch)
+    write_manifest(batch.manifest, decisions_to_rows(photos, group_local(batch, photos)))
+    server.sell_update("20990101", 1, {"status": "listed", "description": "red top"})
+
+    server.group_state["20990101"] = {"running": True}
+    with pytest.raises(RuntimeError, match="still being worked on"):
+        server.delete_batch("20990101")
+    assert batch.root.is_dir()
+    server.group_state.clear()
+
+    out = server.delete_batch("20990101")
+    assert out == {"deleted": "20990101", "folder": str(batch.root), "where": "the Recycle Bin"}
+    assert not batch.root.exists() and (bin_ / "20990101" / "raw_image" / "IMG_1001.jpg").is_file()
+    conn = db.connect()
+    try:
+        assert db.item_rows(conn, "20990101") == {}
+        assert conn.execute("SELECT COUNT(*) FROM photos WHERE batch = ?", ("20990101",)).fetchone()[0] == 0
+    finally:
+        conn.close()
+    assert "20990101" not in {b["name"] for b in server.batches()["batches"]}
+
+    server.new_batch("Elsewhere", str(desk))                      # one kept elsewhere leaves the list too
+    server.delete_batch("Elsewhere")
+    assert not (desk / "Elsewhere").exists() and "Elsewhere" not in config.batches_elsewhere()
+    assert desk.is_dir()                                          # the place it was in stays
+    with pytest.raises(FileNotFoundError):
+        server.delete_batch("Elsewhere")
+
+
+def test_delete_comes_only_from_the_app_s_own_page(batch, tmp_path: Path, monkeypatch):
+    _, move = _trash_into(tmp_path)
+    monkeypatch.setattr(desktop, "move_to_trash", move)
+    srv = _Server(("127.0.0.1", 0), partial(ReviewHandler, ReviewServer()))
+    port = srv.server_address[1]
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        def post(origin=None):
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/batches/delete", method="POST",
+                                         data=json.dumps({"name": "20990101"}).encode())
+            req.add_header("Content-Type", "application/json")
+            if origin:
+                req.add_header("Origin", origin)
+            try:
+                with urllib.request.urlopen(req) as r:
+                    return r.status
+            except urllib.error.HTTPError as e:
+                return e.code
+
+        assert post("https://evil.example") == 403 and batch.root.is_dir()      # another site cannot
+        assert post() == 200 and not batch.root.exists()
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_moving_to_the_trash_on_a_mac_and_on_linux(tmp_path: Path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".Trash" / "Autumn knits").mkdir(parents=True)          # one of that name is already there
+    folder = tmp_path / "Autumn knits"
+    (folder / "raw_image").mkdir(parents=True)
+    monkeypatch.setattr(desktop.sys, "platform", "darwin")
+    monkeypatch.setattr(desktop.Path, "home", lambda: home)
+    assert desktop.move_to_trash(folder) == "the Trash"
+    assert not folder.exists() and (home / ".Trash" / "Autumn knits 2" / "raw_image").is_dir()
+
+    monkeypatch.setattr(desktop.sys, "platform", "linux")
+    (folder / "raw_image").mkdir(parents=True)
+    seen = []
+    monkeypatch.setattr(desktop.subprocess, "run",
+                        lambda cmd, **kw: seen.append(cmd) or subprocess.CompletedProcess(cmd, 0, b"", b""))
+    with pytest.raises(OSError, match="still there"):              # never claims a delete that did not happen
+        desktop.move_to_trash(folder)
+    assert seen[0][:2] == ["gio", "trash"]

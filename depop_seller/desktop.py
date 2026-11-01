@@ -249,6 +249,59 @@ def choose_folder(prompt: str, start: Path | None = None) -> Path | None:
     return folder if folder.is_dir() else None
 
 
+def _windows_recycle(path: Path) -> None:
+    """SHFileOperation with FOF_ALLOWUNDO: the folder goes to the Recycle Bin, silently."""
+    import ctypes
+    from ctypes import wintypes
+
+    class SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                    ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL),
+                    ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+
+    FO_DELETE, FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 3, 0x4, 0x10, 0x40, 0x400
+    op = SHFILEOPSTRUCTW(wFunc=FO_DELETE, pFrom=str(path) + chr(0) + chr(0),   # a double-NUL-ended list
+                         fFlags=FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI)
+    result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+    if result != 0 or op.fAnyOperationsAborted:
+        raise OSError(f"Windows could not move it to the Recycle Bin (code {result})")
+
+
+def move_to_trash(path: Path) -> str:
+    """Put a folder in the Recycle Bin (Windows) or the Trash (macOS), never erase it outright:
+    a delete in the app can then still be undone. Returns where it went; raises if it is still
+    there, so nothing is ever reported as deleted that was not."""
+    path = Path(path)
+    if sys.platform == "win32":
+        _windows_recycle(path)
+        where = "the Recycle Bin"
+    elif sys.platform == "darwin":
+        where = "the Trash"
+        trash = Path.home() / ".Trash"
+        target = trash / path.name
+        n = 2
+        while target.exists():                      # the Trash already holds one of that name
+            target = trash / f"{path.name} {n}"
+            n += 1
+        try:
+            shutil.move(str(path), str(target))
+        except OSError:                             # e.g. another drive, or the Trash is protected: ask Finder
+            done = subprocess.run(["osascript", "-e", "on run argv",
+                                   "-e", 'tell application "Finder" to delete (POSIX file (item 1 of argv) as alias)',
+                                   "-e", "end run", str(path)], capture_output=True, check=False)
+            if done.returncode != 0:
+                raise OSError("the Mac could not move it to the Trash: "
+                              + done.stderr.decode("utf-8", "replace").strip()[-200:])
+    else:
+        done = subprocess.run(["gio", "trash", str(path)], capture_output=True, check=False)
+        if done.returncode != 0:
+            raise OSError("could not move it to the trash: " + done.stderr.decode("utf-8", "replace").strip()[-200:])
+        where = "the trash"
+    if path.exists():
+        raise OSError(f"{path} is still there - nothing was deleted")
+    return where
+
+
 def windows_desktop_dir() -> Path | None:
     """The real Desktop, which OneDrive's folder backup often moves out of the home directory."""
     if os.name != "nt":
