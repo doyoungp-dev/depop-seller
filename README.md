@@ -127,6 +127,15 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 
 ---
 
+## How it's built
+
+Depop Seller was developed through an agentic workflow with Claude Code. I own the architecture, the
+product decisions, and the rules the agent works within, documented in [`CLAUDE.md`](CLAUDE.md): the
+invariants that must never break, the failures that taught them, and the safety constraints every
+change has to respect. Every change is reviewed by me and tested automatically on Windows and macOS,
+and releases go through a guarded, one-command process. The AI's own output is measured rather than
+assumed: `learn` scores Claude's photo grouping against human-reviewed results.
+
 ## For developers
 
 Python 3.12 to 3.14, standard library HTTP server, vanilla JS pages, a small Chrome extension, and the
