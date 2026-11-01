@@ -4,8 +4,8 @@
 the descriptions are written in your own style, and Depop's listing form opens with everything
 filled in. You check it and press Post.
 
-[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-v1.1.5-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSellerSetup.exe)
-[![Download for Mac](https://img.shields.io/badge/Download%20for%20Mac-v1.1.5-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSeller-Mac.zip)
+[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-v1.1.5-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop-seller/releases/latest/download/DepopSellerSetup.exe)
+[![Download for Mac](https://img.shields.io/badge/Download%20for%20Mac-v1.1.5-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop-seller/releases/latest/download/DepopSeller-Mac.zip)
 
 *For my beloved wife, and for our friends. Enjoy the app!*
 
@@ -123,7 +123,7 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 
 - **It never posts for you.** The Depop button fills in the form; pressing Post is always yours.
 - **Not affiliated with Depop or Anthropic.** If Depop changes its listing page and the helper
-  stops filling it in, please [open an issue](https://github.com/doyoungp-dev/depop_seller/issues).
+  stops filling it in, please [open an issue](https://github.com/doyoungp-dev/depop-seller/issues).
 
 ---
 
@@ -140,7 +140,7 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-The tests use tiny synthetic images and never call the API. GitHub runs them on Windows and on a Mac for every push ([tests](https://github.com/doyoungp-dev/depop_seller/actions/workflows/tests.yml)).
+The tests use tiny synthetic images and never call the API. GitHub runs them on Windows and on a Mac for every push ([tests](https://github.com/doyoungp-dev/depop-seller/actions/workflows/tests.yml)).
 
 Releasing a new version is one command, run from a clean `main`. It runs the tests, sets the
 version, commits, tags, builds `DepopSeller.zip` from the committed files and checks it the way the

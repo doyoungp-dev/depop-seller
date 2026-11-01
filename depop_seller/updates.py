@@ -37,7 +37,7 @@ from .desktop import https_context, no_console
 
 log = logging.getLogger(__name__)
 
-REPO = "doyoungp-dev/depop_seller"
+REPO = "doyoungp-dev/depop-seller"
 LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases"
 DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"

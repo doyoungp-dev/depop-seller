@@ -58,7 +58,7 @@ START_HERE = """DEPOP SELLER - how to set it up on this computer
 
 EASIEST ON WINDOWS: skip this folder and use the installer instead.
   Download DepopSellerSetup.exe from
-  https://github.com/doyoungp-dev/depop_seller/releases/latest
+  https://github.com/doyoungp-dev/depop-seller/releases/latest
   open it, click Install - it needs no Python and nothing else.
 
 To set up this folder instead, you need, once:
