@@ -116,7 +116,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const HELPER_VERSION = '1.2';   // bump together with chrome_extension/manifest.json (and sell.html)
+const HELPER_VERSION = '1.3';   // bump together with chrome_extension/manifest.json (and sell.html)
 const PAGE = 60;                 // cards shown at a time; "Show more" adds the next ones
 let S = null;
 const shown = { selling: PAGE, sold: PAGE };

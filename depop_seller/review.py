@@ -1121,9 +1121,10 @@ class ReviewHandler(BaseHTTPRequestHandler):
         if origin in DEPOP_ORIGINS:
             return not urlsplit(self.path).path.startswith(CORS_PATHS)
         if origin.startswith("chrome-extension://"):
-            # the helper's background script hands over the Shop lists; they still need the
-            # one-time pass from /shop/request, so another extension gets nowhere with this
-            return urlsplit(self.path).path != "/shop/import"
+            # the helper's background script hands over the Shop lists (which still need the
+            # one-time pass from /shop/request, so another extension gets nowhere with this) and
+            # marks an item "opened" after the Depop button - the two writes it makes, and only those
+            return urlsplit(self.path).path not in ("/shop/import", "/sell/item")
         host = urlsplit(origin).hostname
         return host not in ("127.0.0.1", "localhost", "::1")
 

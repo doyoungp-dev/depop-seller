@@ -1,6 +1,7 @@
 // Runs on depop.com. When the local Sell page has queued an item and this tab is on
-// "List an item", fetch the item's photos from the local server and put them into Depop's
-// photo input exactly as a drag-and-drop from Explorer would. Never touches the Post button.
+// "List an item", get the item's photos from the local app (through the helper's background
+// script - this tab may not reach the app itself) and put them into Depop's photo input exactly
+// as a drag-and-drop from Explorer would. Never touches the Post button.
 
 const FILE_INPUT = 'input[type=file]';
 let busy = false;
@@ -85,14 +86,16 @@ async function addPhotos(job) {
   try {
     banner(`fetching photos for item ${job.item}…`);
     const server = job.server || 'http://127.0.0.1:8765';
-    const res = await fetch(`${server}/sell/photos?batch=${encodeURIComponent(job.batch)}&item=${job.item}`);
-    if (!res.ok) throw new Error(`local server said ${res.status} - is sell.cmd still running?`);
-    const { photos, description } = await res.json();
+    // through the helper's background script: this tab may not reach the app itself
+    const got = await chrome.runtime.sendMessage({ type: 'sell-photos', server, batch: job.batch, item: job.item });
+    if (!got || !got.ok) throw new Error((got && got.error) || 'the helper could not get the photos from Depop Seller');
+    const { photos, description } = got;
     const dt = new DataTransfer();
     for (let i = 0; i < photos.length; i++) {
-      banner(`loading photo ${i + 1} of ${photos.length}…`);
-      const blob = await (await fetch(photos[i].url)).blob();
-      dt.items.add(new File([blob], photos[i].name, { type: 'image/jpeg', lastModified: Date.now() }));
+      const raw = atob(photos[i].data);
+      const bytes = new Uint8Array(raw.length);
+      for (let j = 0; j < raw.length; j++) bytes[j] = raw.charCodeAt(j);
+      dt.items.add(new File([bytes], photos[i].name, { type: 'image/jpeg', lastModified: Date.now() }));
     }
     banner(`adding ${photos.length} photos to the form…`);
     if (input.multiple) {
@@ -123,9 +126,7 @@ async function addPhotos(job) {
     } else {
       banner(`${photos.length} photos${pasted ? ' and the description' : ''} added for item ${job.item}. Check everything, fill in the rest, and post when you're ready.`);
     }
-    fetch(`${server}/sell/item?batch=${encodeURIComponent(job.batch)}&item=${job.item}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'opened' }),
-    }).catch(() => {});
+    chrome.runtime.sendMessage({ type: 'sell-opened', server, batch: job.batch, item: job.item });
     return true;
   } catch (e) {
     banner('failed: ' + e.message, true);

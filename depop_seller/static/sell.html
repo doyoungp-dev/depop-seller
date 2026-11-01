@@ -465,7 +465,7 @@ function openViaExtension(it, job) {
   window.postMessage({ type: 'depop-seller:open', batch: B, item: it.id, server: location.origin }, '*');
 }
 
-const HELPER_VERSION = '1.2';   // bump together with chrome_extension/manifest.json
+const HELPER_VERSION = '1.3';   // bump together with chrome_extension/manifest.json
 
 function showHelp() {
   const ext = hasExtension();

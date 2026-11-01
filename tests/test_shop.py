@@ -148,7 +148,11 @@ def test_the_helper_reads_the_lists_without_buyers_and_matches_the_app_s_version
     assert "/api/v1/shop/products/" in js and "/presentation/api/v1/receipts/" in js
     assert "type: 'shop-import'" in js and "Authorization" in js
     assert "/shop/import`" not in js and "fetch(`${job.server}" not in js   # the tab itself never calls the app
+    # nor does the Depop button's tab: photos, description and "opened" go through the background script
+    assert "fetch(`${server}" not in js and "/sell/photos" not in js and "/sell/item" not in js
+    assert "type: 'sell-photos'" in js and "type: 'sell-opened'" in js
     bg = (root / "chrome_extension" / "background.js").read_text(encoding="utf-8")
     assert "/shop/import" in bg and "8765" in bg                           # only the app's own address
+    assert "/sell/photos" in bg and "/sell/item" in bg and "startsWith(msg.server + '/')" in bg
     page = (root / "depop_seller" / "static" / "shop.html").read_text(encoding="utf-8")
     assert "depop-seller:shop-sync" in page and "/shop/request" in page

@@ -795,6 +795,10 @@ def test_only_depop_gets_cors_and_other_sites_cannot_post(batch):
         assert post("/batches/new", "https://evil.example") == 403
         assert post("/batches/new", "https://www.depop.com") == 403     # not one of the extension's routes
         assert post("/batches/new", "http://127.0.0.1:8771") == 400     # our own page: reaches the handler
+        # the helper's background script marks an item "opened"; an extension may do nothing else
+        assert post("/sell/item?batch=20990101&item=1", "chrome-extension://abc") == 200
+        assert post("/batches/new", "chrome-extension://abc") == 403
+        assert post("/quit", "chrome-extension://abc") == 403
     finally:
         srv.shutdown()
         srv.server_close()
