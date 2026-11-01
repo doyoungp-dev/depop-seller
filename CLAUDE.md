@@ -4,6 +4,10 @@ Semi-automated pipeline for selling second-hand clothes on Depop.
 Step 1 (done): sort raw product photos into per-item groups, reviewed by drag and drop.
 Step 2 (done): a Sell page whose per-item Depop button opens Depop's listing form with the photos and the description filled in; the human finishes and posts. Descriptions are drafted per item by Claude from photos + a facts line, in the style of `description_style.md`.
 
+## Reporting back to the owner
+
+- **Every time a task is finished, end with a summary and a TL;DR** (owner's request, 2026-11-01): first a short summary of what changed and what was checked, then a **TL;DR** of two or three plain-language lines - what it means for the owner and what (if anything) they need to do next. Plain words, no jargon; say what is still open.
+
 ## Ownership and commit rules
 
 - Project of GitHub user `doyoungp-dev`, **public** at `github.com/doyoungp-dev/depop-seller` (branch `main`, MIT licence) - named `depop_seller` until 2026-11-01, when it was renamed to the usual hyphenated form; GitHub forwards the old address, so **never create a new repo called `depop_seller`** (that would end the forwarding). The Python package and the local folders keep `depop_seller` (Python names cannot have hyphens). Copies installed before 1.1.6 look for updates under the old name and were reinstalled by hand (owner's call). The history from before publication lives in the private `depop_seller-archive` and never goes public.
