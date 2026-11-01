@@ -11,23 +11,29 @@ function Say($text) { Write-Host "`n== $text" }
 # actually run, with its own noise suppressed - a real Store install lives in the same folder.
 # 3.12 to 3.14 only: onnxruntime, one of the libraries, has no build for 3.15 yet, so the install
 # would fail half-way. The py launcher runs the newest Python by default, so ask it by version.
+# Probes may write to stderr ("No suitable Python runtime found"); in Windows PowerShell 5.1 that
+# is an error record, and under "Stop" the first one would end the script before the next try.
+function Runs($exe, [string[]]$arguments) {
+    $ErrorActionPreference = "Continue"
+    & $exe @arguments *> $null
+    return $LASTEXITCODE -eq 0
+}
 $py = $null
 $launcher = Get-Command "py" -ErrorAction SilentlyContinue
 if ($launcher) {
     foreach ($version in @("3.14", "3.13", "3.12")) {
-        & $launcher.Source "-$version" -c "import sys" *> $null
-        if ($LASTEXITCODE -eq 0) {
+        if (Runs $launcher.Source @("-$version", "-c", "import sys")) {
             $py = (& $launcher.Source "-$version" -c "import sys; print(sys.executable)").Trim()
             break
         }
     }
 }
 if (-not $py) {
-    foreach ($candidate in @("python", "python3")) {
-        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-        if (-not $cmd) { continue }
-        & $cmd.Source -c "import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] <= (3, 14) else 1)" *> $null
-        if ($LASTEXITCODE -eq 0) { $py = $cmd.Source; break }
+    # every match on PATH, not just the first: the Store stub usually comes before a real Python
+    foreach ($cmd in @(Get-Command "python", "python3" -CommandType Application -All -ErrorAction SilentlyContinue)) {
+        if (Runs $cmd.Source @("-c", "import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] <= (3, 14) else 1)")) {
+            $py = $cmd.Source; break
+        }
     }
 }
 if (-not $py) {
