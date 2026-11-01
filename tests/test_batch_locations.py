@@ -292,3 +292,52 @@ def test_moving_to_the_trash_on_a_mac_and_on_linux(tmp_path: Path, monkeypatch):
     with pytest.raises(OSError, match="still there"):              # never claims a delete that did not happen
         desktop.move_to_trash(folder)
     assert seen[0][:2] == ["gio", "trash"]
+
+
+def test_settings_lists_each_batch_where_it_is(batch, desk: Path, tmp_path: Path, monkeypatch):
+    from depop_seller import settings
+
+    server = ReviewServer()
+    server.new_batch("Autumn knits", str(desk))
+    server.new_batch("Lost one", str(desk))
+    shutil.rmtree(desk / "Lost one")                              # moved away: not listed, only counted
+    _, move = _trash_into(tmp_path)
+    monkeypatch.setattr(desktop, "move_to_trash", move)
+    server.new_batch("Gone")
+    server.delete_batch("Gone")                                   # deleted: not there at all
+
+    env = settings.environment()
+    listed = {b["name"]: b for b in env["batch_list"]}
+    assert set(listed) == {"20990101", "Autumn knits"}
+    assert listed["Autumn knits"] == {"name": "Autumn knits", "folder": str(desk / "Autumn knits"),
+                                      "photos": 0, "elsewhere": True}
+    assert listed["20990101"]["elsewhere"] is False and listed["20990101"]["photos"] == 8
+    assert env["batches_elsewhere"] == 1 and env["batches_missing"] == 1 and env["photos"] == 8
+
+
+def test_claude_code_is_found_where_the_windows_app_keeps_it_now(tmp_path: Path, monkeypatch):
+    """After a Claude app update on Windows, Claude Code moved out of the packaged app's
+    LocalCache into LOCALAPPDATA / Claude-Data / claude_<id> / claude-code / <version> / <build> / claude.exe.
+    Both places are searched, the new one first; the newest version wins."""
+    from depop_seller import describe
+
+    monkeypatch.setattr(describe.sys, "platform", "win32")
+    monkeypatch.setattr(describe.os, "name", "nt")
+    monkeypatch.setattr(describe, "CLI_NAME", "claude.exe")
+    monkeypatch.setattr(describe, "CLAUDE_CLI_CANDIDATES", [])
+    monkeypatch.setattr("shutil.which", lambda name: None)
+    monkeypatch.setattr(describe, "_LOCALAPPDATA", tmp_path / "Local")
+    monkeypatch.setattr(describe, "_APPDATA", tmp_path / "Roaming")
+    monkeypatch.setattr(describe.Path, "home", classmethod(lambda cls: tmp_path))
+    assert describe.find_claude_cli() is None
+
+    old = tmp_path / "Local" / "Packages" / "Claude_abc" / "LocalCache" / "Roaming" / "Claude" / "claude-code" / "2.1.200"
+    old.mkdir(parents=True)
+    (old / "claude.exe").write_text("", encoding="utf-8")
+    assert describe.find_claude_cli() == old / "claude.exe"                  # an older Claude app still works
+
+    bundle = tmp_path / "Local" / "Claude-Data" / "claude_abc" / "claude-code"
+    for version, build in (("2.1.9", "aaa"), ("2.1.309", "9078b9c1d466")):
+        (bundle / version / build).mkdir(parents=True)
+        (bundle / version / build / "claude.exe").write_text("", encoding="utf-8")
+    assert describe.find_claude_cli() == bundle / "2.1.309" / "9078b9c1d466" / "claude.exe"

@@ -66,5 +66,5 @@ there); on Linux, ./depop-seller.sh - and finish in its Settings tab:
   * the Claude sign-in       (writes descriptions, on your own subscription)
   * the Chrome helper        (puts the photos into Depop's form)
 
-To stop the app: Settings -> Close Depop Seller, or Quit it in the Dock.
+To stop the app: close its window, or Quit it in the Dock.
 DONE

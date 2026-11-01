@@ -17,6 +17,15 @@
   table.paths td.v { word-break: break-all; }
   table.paths td.b { width: 70px; text-align: right; }
   #data-dir { font-size: 13px; padding: 6px 10px; }
+  table.paths td.b { width: 130px; white-space: nowrap; }
+  table.paths td.b button + button { margin-left: 6px; }
+  h3.sub { margin: 18px 0 2px; font: 600 15px/1.3 var(--font-display); }
+  @media (max-width: 640px) {
+    table.paths, table.paths tbody, table.paths tr, table.paths td { display: block; width: auto; }
+    table.paths tr { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    table.paths td { padding: 2px 0; border-bottom: none; text-align: left; }
+    table.paths td.b { width: auto; text-align: left; padding-top: 6px; }
+  }
   .release-notes { margin-top: 12px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line);
     border-radius: 10px; font-size: 13px; color: var(--text-2); white-space: pre-wrap; max-height: 220px; overflow: auto; }
   .release-notes::before { content: "What's new"; display: block; font-weight: 600; color: var(--text); margin-bottom: 6px; }
@@ -122,21 +131,11 @@
   </div>
 
   <div class="panel">
-    <h2>Close the app</h2>
-    <div class="why">Closing the app window closes the app - nothing keeps running in the background.
-      If it is still grouping photos, writing a description or feeding the Depop helper, it stays up
-      until that finishes. This button stops it right now.</div>
-    <div class="row">
-      <button id="btn-quit">Close Depop Seller</button>
-      <span class="note" id="quit-note"></span>
-    </div>
-  </div>
-
-  <div class="panel">
     <h2>Your data folder</h2>
-    <div class="why">Everything of yours lives in one folder, separate from the app: your photos and
-      their grouping, your listings and descriptions, your style, your API key. <b>To use Depop Seller
-      on another computer, install the app there and copy this one folder across</b> - nothing else.</div>
+    <div class="why">Your listings and descriptions, your style, your API key and the batches kept in the
+      usual place all live in this one folder, separate from the app. <b>To use Depop Seller on another
+      computer, install the app there and copy this folder across</b> - plus the folders of any batches you
+      chose to keep somewhere else.</div>
     <div class="row"><code id="data-dir"></code><button class="small" data-copy="data-dir">Copy</button></div>
     <div class="note" id="data-note"></div>
   </div>
@@ -146,6 +145,9 @@
     <div class="why">Everything runs on this computer. Nothing is uploaded except the photos you group
       (to Anthropic) and what you post yourself (to Depop).</div>
     <table class="paths"><tbody id="paths"></tbody></table>
+    <h3 class="sub">Your batches</h3>
+    <table class="paths"><tbody id="batch-paths"></tbody></table>
+    <div class="note" id="batch-note"></div>
   </div>
 </main>
 <script>
@@ -206,16 +208,11 @@ async function load() {
 
   const e = S.environment;
   $('data-dir').textContent = e.data_dir;
-  note('data-note', `${e.batches} batches, ${e.photos} photos, plus your listings and your style.`);
-  const rows = [
-    ['Photos', e.photos_dir + (e.photos_dir_override ? '   (set by DEPOP_SELLER_PRODUCT_DIR)' : ''), `${e.batches} batches, ${e.photos} photos`],
-    ['Listings', e.database, 'items, descriptions and what you have listed'],
-    ['Style', e.style_file, 'edited on the Style tab'],
-    ['App', e.project_dir, `${e.platform}, Python ${e.python}`],
-  ];
-  const body = $('paths');
-  body.innerHTML = '';
-  rows.forEach(([k, v, extra]) => {
+  const here = e.batch_list.length - e.batches_elsewhere;
+  let dataNote = `${here} batch${here === 1 ? '' : 'es'} in here, plus your listings and your style.`;
+  if (e.batches_elsewhere) dataNote += ` ${e.batches_elsewhere} batch${e.batches_elsewhere === 1 ? ' is' : 'es are'} kept somewhere else - see Your batches below.`;
+  note('data-note', dataNote, e.batches_elsewhere ? 'warn' : '');
+  const pathRow = (k, v, extra, openName) => {
     const tr = el('tr');
     tr.appendChild(el('td', 'k', k));
     const td = el('td', 'v');
@@ -224,11 +221,34 @@ async function load() {
     tr.appendChild(td);
     const b = el('td', 'b');
     const copy = el('button', 'small', 'Copy');
-    copy.onclick = () => navigator.clipboard.writeText(v.split('   ')[0]).then(() => { copy.textContent = 'Copied'; setTimeout(() => copy.textContent = 'Copy', 1200); });
+    copy.onclick = () => navigator.clipboard.writeText(v).then(() => { copy.textContent = 'Copied'; setTimeout(() => copy.textContent = 'Copy', 1200); });
     b.appendChild(copy);
+    if (openName) {
+      const open = el('button', 'small', 'Open');
+      open.title = 'Show its photo folder';
+      open.onclick = () => post('/batches/open', { name: openName });
+      b.appendChild(open);
+    }
     tr.appendChild(b);
-    body.appendChild(tr);
-  });
+    return tr;
+  };
+  const body = $('paths');
+  body.innerHTML = '';
+  [
+    ['New batches', e.photos_dir, 'where a new batch goes unless you choose another folder for it' + (e.photos_dir_override ? ' (set by DEPOP_SELLER_PRODUCT_DIR)' : '')],
+    ['Listings', e.database, 'items, descriptions and what you have listed'],
+    ['Style', e.style_file, 'edited on the Style tab'],
+    ['App', e.project_dir, `${e.platform}, Python ${e.python}`],
+  ].forEach(([k, v, extra]) => body.appendChild(pathRow(k, v, extra)));
+
+  // one row per batch whose folder is there - deleted ones are gone, lost ones are on the Batches page
+  const batchBody = $('batch-paths');
+  batchBody.innerHTML = '';
+  e.batch_list.forEach(b => batchBody.appendChild(pathRow(b.name, b.folder,
+    `${b.photos} photo${b.photos === 1 ? '' : 's'} · ` + (b.elsewhere ? 'kept somewhere else you chose' : 'in the usual place'), b.name)));
+  let bn = e.batch_list.length ? '' : 'No batches yet - make one on the Batches tab.';
+  if (e.batches_missing) bn += (bn ? ' ' : '') + `${e.batches_missing} batch${e.batches_missing === 1 ? '' : 'es'} cannot be found right now (moved, or on a drive that is not plugged in) - see the Batches tab.`;
+  note('batch-note', bn, e.batches_missing ? 'warn' : '');
 
   const info = await (await fetch('/batches')).json();
   const recent = info.batches[0];
@@ -422,13 +442,6 @@ async function waitForNewCopy(since) {
   }
   setTimeout(() => waitForNewCopy(since), 1000);
 }
-
-$('btn-quit').onclick = async () => {
-  if (!confirm('Close Depop Seller?\n\nEverything is already saved. Open it again from the desktop icon whenever you like.')) return;
-  await post('/quit');
-  document.body.innerHTML = '<div style="padding:60px;text-align:center;font:16px system-ui;color:#71717a">'
-    + 'Depop Seller is closed.<br><br>You can close this window - open it again from the desktop icon.</div>';
-};
 
 $('btn-reload').onclick = load;
 load();

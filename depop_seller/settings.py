@@ -234,8 +234,18 @@ def shutil_which(name: str) -> str | None:
 
 def environment() -> dict:
     """Where everything lives, for the bottom of the Settings page."""
+    from .review import PHOTO_SUFFIXES
+
     batches = config.batch_dirs()
+    usual = config.PRODUCT_IMAGE_DIR.resolve()
+    batch_list = []
+    for d in reversed(batches):                                  # most recently used first, like Batches
+        photos = sum(1 for p in (d / "raw_image").iterdir() if p.is_file() and p.suffix.lower() in PHOTO_SUFFIXES)
+        batch_list.append({"name": d.name, "folder": str(d), "photos": photos, "elsewhere": d.parent.resolve() != usual})
     return {
+        "batch_list": batch_list,                                # only batches whose folder is there
+        "batches_elsewhere": sum(1 for b in batch_list if b["elsewhere"]),
+        "batches_missing": len(config.missing_batches()),
         "python": sys.version.split()[0],
         "platform": {"win32": "Windows", "darwin": "macOS"}.get(sys.platform, sys.platform),
         "data_dir": str(config.DATA_DIR),
@@ -246,7 +256,7 @@ def environment() -> dict:
         "style_file": str(config.STYLE_FILE),
         "extension_dir": str(config.PROJECT_ROOT / "chrome_extension"),
         "batches": len(batches),
-        "photos": sum(1 for d in batches for p in (d / "raw_image").iterdir() if p.is_file()),
+        "photos": sum(b["photos"] for b in batch_list),
     }
 
 

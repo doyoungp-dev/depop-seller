@@ -78,7 +78,9 @@ def _cli_in(version_dir: Path) -> Path | None:
     direct = version_dir / CLI_NAME
     if direct.is_file():
         return direct
-    builds = [p for p in version_dir.glob(f"*/claude.app/Contents/MacOS/{CLI_NAME}") if p.is_file()]
+    builds = [p for p in (*version_dir.glob(f"*/claude.app/Contents/MacOS/{CLI_NAME}"),
+                          *version_dir.glob(f"*/{CLI_NAME}"))      # Windows app since late 2026: <version>/<build>/claude.exe
+              if p.is_file()]
     return max(builds, key=lambda p: p.stat().st_mtime) if builds else None
 
 
@@ -95,7 +97,12 @@ def _bundle_dirs() -> list[Path]:
     if sys.platform == "darwin":
         return [Path.home() / "Library" / "Application Support" / "Claude" / "claude-code"]
     if os.name == "nt":
-        out = [pkg / "LocalCache" / "Roaming" / "Claude" / "claude-code"
+        # Newer Claude app versions keep it in %LOCALAPPDATA%\Claude-Data\claude_<id>\claude-code;
+        # older ones inside the packaged app's LocalCache (found 2026-11-01, after an app update
+        # moved it and every Generate Description said Claude Code was missing).
+        data = _LOCALAPPDATA / "Claude-Data"
+        out = [d / "claude-code" for d in sorted(data.glob("claude_*"))] if data.is_dir() else []
+        out += [pkg / "LocalCache" / "Roaming" / "Claude" / "claude-code"
                for pkg in sorted((_LOCALAPPDATA / "Packages").glob("Claude_*"))
                if (_LOCALAPPDATA / "Packages").is_dir()]
         out.append(_APPDATA / "Claude" / "claude-code")

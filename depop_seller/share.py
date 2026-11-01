@@ -114,7 +114,7 @@ HOW YOU USE IT
 
 TO CLOSE IT
   Close the app window - that closes the app. (It waits if it is still busy,
-  for example writing a description.) Settings -> "Close Depop Seller" also works.
+  for example writing a description.) On a Mac, Quit it in the Dock also works.
 
 UPDATING
   Settings tab -> "Check for updates". If there is a newer version, "Update"
