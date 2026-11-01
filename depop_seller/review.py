@@ -32,6 +32,8 @@ Routes:
   POST /settings/login/code   {code}: the code the sign-in page shows when the link had to be opened by hand
   POST /settings/login/terminal  the fallback: a terminal window where /login can be typed
   POST /settings/login/test   `claude auth status`: signed in, and to which plan
+  GET  /settings/uninstall/plan  ?delete_data=0|1 : what Delete Depop Seller would remove, and what stays
+  POST /settings/uninstall    {"delete_data"}: start the delete (uninstall.py) and close the app
   GET  /batches               every batch folder with its status, plus API key availability
   GET  /state?batch=          current grouping as JSON (404 if the batch has no manifest yet)
   GET  /thumbs/<file>?batch=  cached thumbnail
@@ -732,6 +734,24 @@ class ReviewServer:
         self.sessions.pop(name, None)
         return {"forgotten": name}
 
+    def start_uninstall(self, http_server, delete_data: bool) -> dict:
+        """Delete the app from this computer (uninstall.py does the work once this process has
+        ended): refused while anything is still running, then the app closes itself."""
+        from . import uninstall
+
+        reason = self.busy()
+        if reason:
+            raise RuntimeError(f"Depop Seller is still {reason} - delete it once that has finished.")
+        out = uninstall.start(delete_data)
+        log.info("deleting Depop Seller from this computer (data %s)", "too" if delete_data else "kept")
+
+        def stop() -> None:
+            time.sleep(1.5)                      # let the page read the answer first
+            http_server.shutdown()
+
+        threading.Thread(target=stop, name="uninstall", daemon=True).start()
+        return out
+
     def delete_batch(self, name: str) -> dict:
         """Delete a batch: its whole folder goes to the Recycle Bin / Trash (photos, grouping,
         cut-outs, exports), and its items and descriptions leave the database. The page asks first;
@@ -1166,6 +1186,10 @@ class ReviewHandler(BaseHTTPRequestHandler):
             elif path == "/settings/state":
                 from . import settings as app_settings
                 self._json(app_settings.state())
+            elif path == "/settings/uninstall/plan":
+                from . import uninstall
+                query = parse_qs(urlsplit(self.path).query)
+                self._json(uninstall.plan((query.get("delete_data") or ["0"])[0] == "1"))
             elif path == "/settings/login/status":
                 from . import settings as app_settings
                 self._json(app_settings.SIGN_IN.status())
@@ -1288,6 +1312,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
                     self._json(app_settings.SIGN_IN.start())
                 elif path == "/settings/login/code":
                     self._json(app_settings.SIGN_IN.send_code(str(self._body().get("code") or "")))
+                elif path == "/settings/uninstall":
+                    self._json(self.server_state.start_uninstall(self.server, bool(self._body().get("delete_data"))))
                 elif path == "/settings/login/terminal":
                     self._json(app_settings.open_login_terminal())
                 elif path == "/settings/login/test":

@@ -150,7 +150,29 @@
     <table class="paths"><tbody id="batch-paths"></tbody></table>
     <div class="note" id="batch-note"></div>
   </div>
+
+  <div class="panel">
+    <h2>Delete Depop Seller</h2>
+    <div class="why">Removes the app from this computer. Your data folder - photos, listings, style and key -
+      stays unless you choose otherwise, so installing again later picks up where you left off.</div>
+    <div class="row">
+      <button class="danger" id="btn-uninstall">Delete Depop Seller…</button>
+      <span class="note inline" id="uninstall-note"></span>
+    </div>
+  </div>
 </main>
+<dialog class="confirm" id="un-dialog" aria-labelledby="un-title">
+  <h2 id="un-title"><span class="sign" aria-hidden="true">!</span><span>Delete Depop Seller?</span></h2>
+  <p>If you click <b>Continue</b>, Depop Seller closes and these go to <span id="un-bin">the Recycle Bin</span>:</p>
+  <ul id="un-list"></ul>
+  <p><label class="chk"><input type="checkbox" id="un-data"> Also delete my data folder - photos in the usual
+    place, listings, descriptions, style and API key</label></p>
+  <p id="un-keeps"></p>
+  <div class="row">
+    <button id="un-cancel">Cancel</button>
+    <button class="danger-solid" id="un-continue">Continue - delete Depop Seller</button>
+  </div>
+</dialog>
 <script>
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -444,7 +466,68 @@ async function waitForNewCopy(since) {
   setTimeout(() => waitForNewCopy(since), 1000);
 }
 
+// ---- deleting the app ---------------------------------------------------------------
+// The server writes a small script that waits for the app to close and then removes it (Windows'
+// own uninstaller for an installed copy, the Recycle Bin / Trash for everything else). Nothing
+// happens until Continue; Cancel has the focus, and the data folder stays unless ticked.
+let UN = null;
+
+async function showUninstallPlan() {
+  const del = $('un-data').checked ? '1' : '0';
+  UN = await (await fetch('/settings/uninstall/plan?delete_data=' + del, { cache: 'no-store' })).json();
+  $('un-bin').textContent = UN.bin;
+  const list = $('un-list');
+  list.innerHTML = '';
+  UN.remove.forEach(r => {
+    const li = el('li', null, r.what);
+    li.appendChild(el('div', 'muted', r.path));
+    list.appendChild(li);
+  });
+  const keeps = [];
+  if (UN.keeps_data && UN.data_folder) keeps.push(`Your data stays in ${UN.data_folder}.`);
+  if (UN.batches_elsewhere.length) keeps.push(`Batches you keep elsewhere stay where they are: ${UN.batches_elsewhere.map(b => b.name).join(', ')}.`);
+  keeps.push('The Chrome helper and the Claude app are separate - the next screen says how to remove the helper.');
+  $('un-keeps').textContent = keeps.join(' ');
+}
+
+async function prepareUninstall() {
+  const p = await (await fetch('/settings/uninstall/plan?delete_data=0', { cache: 'no-store' })).json();
+  if (p.kind === 'developer') {
+    $('btn-uninstall').disabled = true;
+    note('uninstall-note', 'This copy is a developer checkout (git), so it is not deleted from here.');
+  }
+}
+
+$('btn-uninstall').onclick = async () => {
+  $('un-data').checked = false;
+  await showUninstallPlan();
+  $('un-continue').disabled = false;
+  $('un-dialog').showModal();
+  $('un-cancel').focus();
+};
+$('un-data').onchange = showUninstallPlan;
+$('un-cancel').onclick = () => $('un-dialog').close();
+$('un-continue').onclick = async () => {
+  $('un-continue').disabled = true;
+  const r = await post('/settings/uninstall', { delete_data: $('un-data').checked });
+  $('un-dialog').close();
+  if (!r.ok) { note('uninstall-note', r.error, 'err'); return; }
+  const mac = r.data.platform === 'mac';
+  const box = el('div', 'panel');
+  box.style.cssText = 'max-width:640px;margin:60px auto';
+  box.appendChild(el('h2', null, 'Depop Seller is being removed'));
+  box.appendChild(el('p', null, `It has closed, and in a few seconds its files go to ${r.data.bin}. You can close this window.`));
+  if (r.data.keeps_data && r.data.data_folder) box.appendChild(el('p', null, `Your data is still in ${r.data.data_folder} - install Depop Seller again any time and it picks up from there.`));
+  const steps = el('ol');
+  steps.appendChild(el('li', null, 'Remove the Chrome helper: open chrome://extensions in Chrome, find "Depop Seller helper" and click Remove.'));
+  if (mac) steps.appendChild(el('li', null, 'If Depop Seller is in your Dock, right-click its icon and choose Options, then Remove from Dock.'));
+  box.appendChild(el('p', null, 'What is left for you to do:'));
+  box.appendChild(steps);
+  document.querySelector('main').replaceChildren(box);
+};
+
 $('btn-reload').onclick = load;
+prepareUninstall();
 load();
 loadVersion();
 

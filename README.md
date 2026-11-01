@@ -89,7 +89,7 @@ Applications to the Trash - your data folder stays where it is.
 | **Sell** | Type a line of facts per item, tick items, **Generate Selected Descriptions**. Then **Depop** on each item. Tick **Listed** once it's posted. |
 | **Shop** | What you are **selling** and have **sold** on Depop, with totals - item count, asking value, what you received, this month, sales to ship. **Refresh** reads it from Depop through the Chrome helper. |
 | **Style** | Tell Claude how descriptions should change, see exactly what changes, accept or discard. Every version is kept. |
-| **Settings** | Your API key, the Claude sign-in, the Chrome helper, **Check for updates**, your data folder, and where each batch is kept. |
+| **Settings** | Your API key, the Claude sign-in, the Chrome helper, **Check for updates**, your data folder, where each batch is kept, and **Delete Depop Seller** (your data stays unless you choose otherwise). |
 
 ## Your data stays yours
 
