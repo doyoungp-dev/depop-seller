@@ -139,7 +139,7 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-The tests use tiny synthetic images and never call the API.
+The tests use tiny synthetic images and never call the API. GitHub runs them on Windows and on a Mac for every push ([tests](https://github.com/doyoungp-dev/depop_seller/actions/workflows/tests.yml)).
 
 Releasing a new version is one command, run from a clean `main`. It runs the tests, sets the
 version, commits, tags, builds `DepopSeller.zip` from the committed files and checks it the way the

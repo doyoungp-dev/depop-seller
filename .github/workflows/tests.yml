@@ -1,0 +1,43 @@
+# Runs the whole test suite on a fresh Windows machine and a fresh Mac on every push, so a change
+# made on one system that breaks the other shows up as a red X on the commit within minutes.
+# Free on this public repository (GitHub's standard runners). It only tests: nothing is built or
+# published here - releases are still made by hand with `python -m depop_seller release`.
+# No secrets: the tests use synthetic photos and fake keys, never the Anthropic API.
+
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:          # a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:                  # a newer push makes an older, still-running check pointless
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false        # always report both systems, even when one fails
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"    # the version the app and the Windows installer ship with
+          cache: pip
+
+      - name: Install the app and the test tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run the tests
+        run: python -m pytest -q -p no:cacheprovider

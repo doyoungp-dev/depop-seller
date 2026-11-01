@@ -25,7 +25,8 @@ log = logging.getLogger(__name__)
 
 # Folders that never travel: build output, secrets, the owner's own work.
 SKIP_DIRS = {".git", ".venv", ".pytest_cache", "__pycache__", "product_image", "style_history",
-             ".chrome-profile", "node_modules", ".idea", ".vscode", ".claude", "dist", "build"}
+             ".chrome-profile", "node_modules", ".idea", ".vscode", ".claude", "dist", "build",
+             ".github"}                  # the CI set-up is for the repository, not part of the app
 SKIP_SUFFIXES = {".db", ".pyc", ".log", ".zip"}
 SKIP_NAMES = {".DS_Store", "Thumbs.db", "description_style.md"}      # the last one is the seller's own
 # Written fresh into every zip. A copy of the app that came out of a zip already holds one, so the
