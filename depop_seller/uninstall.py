@@ -168,12 +168,14 @@ def start(delete_data: bool, pid: int | None = None) -> dict:
         job = folder / f"depop-seller-uninstall-{pid}.json"
         job.write_text(json.dumps(windows_job(delete_data, pid)), encoding="utf-8")
         flags = no_console().get("creationflags", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+        # cwd: a process standing in a folder keeps Windows from removing it - the app's own folder was
+        # left behind, empty, when the script started there (found by the first real test)
         subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", _WINDOWS_SCRIPT],
-                         env={**os.environ, "DEPOP_UNINSTALL_PLAN": str(job)}, creationflags=flags,
+                         env={**os.environ, "DEPOP_UNINSTALL_PLAN": str(job)}, creationflags=flags, cwd=str(folder),
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
     else:
         script = folder / f"depop-seller-uninstall-{pid}.sh"
         script.write_text(posix_script(delete_data, pid), encoding="utf-8")
-        subprocess.Popen(["/bin/sh", str(script)], start_new_session=True, stdin=subprocess.DEVNULL,
+        subprocess.Popen(["/bin/sh", str(script)], start_new_session=True, cwd=str(folder), stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
     return what

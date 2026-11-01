@@ -102,7 +102,7 @@ def test_on_a_mac_everything_goes_to_the_trash_and_odd_folder_names_are_safe(mac
     started = {}
     monkeypatch.setattr(uninstall.subprocess, "Popen", lambda argv, **kw: started.update(argv=argv, kw=kw))
     out = uninstall.start(delete_data=True, pid=99)
-    assert started["argv"][0] == "/bin/sh" and started["kw"]["start_new_session"] is True
+    assert started["argv"][0] == "/bin/sh" and started["kw"]["start_new_session"] is True and started["kw"]["cwd"] != str(odd)
     written = Path(started["argv"][1]).read_text(encoding="utf-8")
     assert shlex.quote(str(machine["data"].resolve())) in written and out["bin"] == "the Trash"
 
@@ -114,6 +114,7 @@ def test_on_windows_the_script_gets_its_plan_as_a_file(machine, monkeypatch):
     out = uninstall.start(delete_data=False, pid=1234)
     assert started["argv"][0] == "powershell" and "SendToRecycleBin" in started["argv"][-1]
     assert started["kw"]["creationflags"] & 0x08000000                              # no console window
+    assert started["kw"]["cwd"] != str(machine["app"])                              # never standing in what it removes
     job = json.loads(Path(started["kw"]["env"]["DEPOP_UNINSTALL_PLAN"]).read_text(encoding="utf-8"))
     assert job["pid"] == 1234 and str(machine["app"]) in job["to_bin"] and out["bin"] == "the Recycle Bin"
 
