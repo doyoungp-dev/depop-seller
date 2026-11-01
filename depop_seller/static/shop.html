@@ -10,9 +10,10 @@
   .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .head h2 { margin: 0; }
   .head .when { margin-left: auto; font-size: 12.5px; color: var(--muted); }
-  button.fold { width: 30px; height: 30px; padding: 0; border-radius: 8px; font-size: 15px; line-height: 1;
-                display: inline-flex; align-items: center; justify-content: center; transition: transform .15s; }
-  .panel.folded button.fold { transform: rotate(-90deg); }
+  button.fold { width: 30px; height: 30px; padding: 0; border-radius: 8px; font-size: 17px; line-height: 1;
+                display: inline-flex; align-items: center; justify-content: center; }
+  button.fold span { display: inline-block; transition: transform .15s; }
+  .panel.folded button.fold span { transform: rotate(-90deg); }
   .panel.folded > :not(.head) { display: none; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 6px; }
   .stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
@@ -68,7 +69,7 @@
 
   <div class="panel" id="selling">
     <div class="head">
-      <button class="fold" id="selling-fold" aria-expanded="true" title="Fold this list">&#9662;</button>
+      <button class="fold" id="selling-fold" aria-expanded="true" title="Fold this list"><span>&#9662;</span></button>
       <h2>Selling</h2>
       <span class="pill" id="selling-pill">-</span>
       <span class="when" id="selling-when"></span>
@@ -92,7 +93,7 @@
 
   <div class="panel" id="sold">
     <div class="head">
-      <button class="fold" id="sold-fold" aria-expanded="true" title="Fold this list">&#9662;</button>
+      <button class="fold" id="sold-fold" aria-expanded="true" title="Fold this list"><span>&#9662;</span></button>
       <h2>Sold</h2>
       <span class="pill" id="sold-pill">-</span>
       <span class="when" id="sold-when"></span>
