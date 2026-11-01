@@ -37,6 +37,13 @@ CREATE TABLE IF NOT EXISTS photos (
     taken_at     TEXT,
     PRIMARY KEY (batch, item_id, photo_no)
 );
+-- What Depop itself says is for sale ("selling") and has sold ("sold"), as last read by the
+-- Chrome helper: one JSON snapshot per kind, replaced by each Refresh (see shop.py).
+CREATE TABLE IF NOT EXISTS shop_snapshot (
+    kind         TEXT    PRIMARY KEY,
+    synced_at    TEXT    NOT NULL,
+    data         TEXT    NOT NULL
+);
 """
 
 # Item-level fields that later steps fill in; kept across a re-apply when the item's photos are unchanged.

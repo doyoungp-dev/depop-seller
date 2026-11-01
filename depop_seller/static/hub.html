@@ -48,6 +48,7 @@
     <a href="/hub" data-tab="batches">Batches</a>
     <a href="/" data-tab="review">Review</a>
     <a href="/sell" data-tab="sell">Sell</a>
+    <a href="/shop" data-tab="shop">Shop</a>
     <a href="/style" data-tab="style">Style</a>
     <a href="/settings" data-tab="settings">Settings</a>
   </nav>
@@ -114,7 +115,7 @@ function syncTabs(active, batch, hasManifest) {
   document.querySelectorAll('nav.tabs a').forEach(a => {
     const tab = a.dataset.tab;
     a.classList.toggle('active', tab === active);
-    if (tab === 'batches' || tab === 'style' || tab === 'settings') return;
+    if (tab === 'batches' || tab === 'shop' || tab === 'style' || tab === 'settings') return;
     a.href = (tab === 'review' ? '/' : '/sell') + (batch ? '?batch=' + encodeURIComponent(batch) : '');
     a.classList.toggle('off', !batch || (tab === 'sell' && hasManifest === false));
   });

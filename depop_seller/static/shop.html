@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Depop Seller – Shop</title>
+<link rel="icon" href="/icon.png">
+<link rel="stylesheet" href="/app.css">
+<style>
+  main { max-width: 1120px; margin: 0 auto; }
+  .head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .head h2 { margin: 0; }
+  .head .when { margin-left: auto; font-size: 12.5px; color: var(--muted); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 6px; }
+  .stat { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .stat .n { font: 600 22px/1.2 var(--font-display); color: var(--text); }
+  .stat .l { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .stat.attn { background: var(--warn-soft); border-color: var(--line-strong); }
+  .stat.attn .n { color: var(--warn-text); }
+  .tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0 4px; }
+  .tools input[type=search] { flex: 1; min-width: 200px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; margin-top: 12px; }
+  .card { display: block; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
+          color: inherit; text-decoration: none; transition: box-shadow .15s, transform .15s; }
+  .card:hover { box-shadow: var(--shadow-lift); transform: translateY(-1px); }
+  .card img, .card .noimg { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--surface-3); }
+  .card .body { padding: 9px 11px 11px; }
+  .card .t { font-size: 13px; line-height: 1.35; height: 2.7em; overflow: hidden; color: var(--text); }
+  .card .p { font-weight: 600; margin-top: 5px; }
+  .card .p s { color: var(--muted); font-weight: 400; margin-left: 5px; }
+  .card .m { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .rows { margin-top: 12px; }
+  .sale { display: grid; grid-template-columns: 64px 1fr auto; gap: 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+  .sale .pics { display: flex; }
+  .sale .pics img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; background: var(--surface-3); }
+  .sale .t { font-size: 13.5px; color: var(--text); }
+  .sale .m { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .sale .money { text-align: right; white-space: nowrap; }
+  .sale .money b { display: block; font-size: 15px; }
+  .sale .money span { font-size: 12px; color: var(--muted); }
+  .more { margin-top: 12px; }
+  @media (max-width: 640px) { .sale { grid-template-columns: 52px 1fr; } .sale .money { grid-column: 2; text-align: left; } }
+</style>
+</head>
+<body>
+<div id="stale-banner" hidden></div>
+<header class="bar">
+  <a class="brand" href="/hub"><img src="/icon.png" alt=""> Depop Seller</a>
+  <nav class="tabs">
+    <a href="/hub" data-tab="batches">Batches</a>
+    <a href="/" data-tab="review">Review</a>
+    <a href="/sell" data-tab="sell">Sell</a>
+    <a href="/shop" data-tab="shop">Shop</a>
+    <a href="/style" data-tab="style">Style</a>
+    <a href="/settings" data-tab="settings">Settings</a>
+  </nav>
+  <div class="actions"><span id="status" class="muted"></span></div>
+</header>
+<main>
+  <div class="panel" id="helper-missing" hidden>
+    <h2>Add the Chrome helper first</h2>
+    <div class="why" id="helper-why">The Shop tab reads your shop through the Depop Seller helper in Chrome, using your own
+      Depop sign-in. Add it on the <a href="/settings">Settings</a> tab, then come back.</div>
+  </div>
+
+  <div class="panel" id="selling">
+    <div class="head">
+      <h2>Selling</h2>
+      <span class="pill" id="selling-pill">-</span>
+      <span class="when" id="selling-when"></span>
+      <button class="primary" id="selling-refresh">Refresh</button>
+    </div>
+    <div class="note" id="selling-note"></div>
+    <div class="stats" id="selling-stats"></div>
+    <div class="tools" id="selling-tools" hidden>
+      <input type="search" id="selling-search" placeholder="Search what you are selling">
+      <select id="selling-sort">
+        <option value="new">Newest first</option>
+        <option value="old">Oldest first</option>
+        <option value="high">Price: high to low</option>
+        <option value="low">Price: low to high</option>
+        <option value="likes">Most liked</option>
+      </select>
+    </div>
+    <div class="grid" id="selling-list"></div>
+    <div class="more" id="selling-more"></div>
+  </div>
+
+  <div class="panel" id="sold">
+    <div class="head">
+      <h2>Sold</h2>
+      <span class="pill" id="sold-pill">-</span>
+      <span class="when" id="sold-when"></span>
+      <button class="primary" id="sold-refresh">Refresh</button>
+    </div>
+    <div class="note" id="sold-note"></div>
+    <div class="stats" id="sold-stats"></div>
+    <div class="tools" id="sold-tools" hidden>
+      <input type="search" id="sold-search" placeholder="Search what you have sold">
+      <select id="sold-filter">
+        <option value="all">All sales</option>
+        <option value="to_ship">To ship</option>
+        <option value="month">This month</option>
+      </select>
+    </div>
+    <div class="rows" id="sold-list"></div>
+    <div class="more" id="sold-more"></div>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const HELPER_VERSION = '1.2';   // bump together with chrome_extension/manifest.json (and sell.html)
+const PAGE = 60;                 // cards shown at a time; "Show more" adds the next ones
+let S = null;
+const shown = { selling: PAGE, sold: PAGE };
+
+function syncTabs(active, batch, hasManifest) {
+  document.querySelectorAll('nav.tabs a').forEach(a => {
+    const tab = a.dataset.tab;
+    a.classList.toggle('active', tab === active);
+    if (tab === 'batches' || tab === 'shop' || tab === 'style' || tab === 'settings') return;
+    a.href = (tab === 'review' ? '/' : '/sell') + (batch ? '?batch=' + encodeURIComponent(batch) : '');
+    a.classList.toggle('off', !batch || (tab === 'sell' && hasManifest === false));
+  });
+}
+
+async function post(path, body) {
+  const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const text = await res.text();
+  if (!res.ok) return { ok: false, error: text };
+  return { ok: true, data: text ? JSON.parse(text) : {} };
+}
+
+function money(amount, currency) {
+  try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(amount || 0); }
+  catch (e) { return (currency || '') + ' ' + (amount || 0).toFixed(2); }
+}
+
+function ago(stamp) {
+  if (!stamp) return '';
+  const then = new Date(stamp.replace(' ', 'T'));
+  const mins = Math.round((Date.now() - then.getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 60 * 24) return `${Math.round(mins / 60)} h ago`;
+  return then.toLocaleDateString();
+}
+
+function niceDate(d) {
+  if (!d) return '';
+  const t = new Date(d.length <= 10 ? d + 'T12:00:00' : d);
+  return isNaN(t) ? d : t.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function stat(n, label, attn) {
+  const box = el('div', 'stat' + (attn ? ' attn' : ''));
+  box.append(el('div', 'n', n), el('div', 'l', label));
+  return box;
+}
+
+function helperVersion() { return document.documentElement.dataset.depopSellerExt || ''; }
+
+// ---- the two lists ------------------------------------------------------------------
+function renderSelling() {
+  const s = S.selling;
+  const list = $('selling-list'), stats = $('selling-stats');
+  list.innerHTML = ''; stats.innerHTML = ''; $('selling-more').innerHTML = '';
+  if (!s) {
+    $('selling-pill').textContent = 'not read yet';
+    $('selling-note').textContent = 'Press Refresh to read what you are selling on Depop.';
+    $('selling-tools').hidden = true;
+    return;
+  }
+  const t = s.totals;
+  $('selling-pill').textContent = `${t.count} item${t.count === 1 ? '' : 's'}`;
+  $('selling-when').textContent = 'refreshed ' + ago(s.items_from || s.synced_at);
+  let note = '';
+  if (s.error) note = 'Refresh did not work: ' + s.error + (s.items.length ? ' - showing the list from before.' : '');
+  else if (s.expected != null && s.expected !== t.count) note = `Depop counts ${s.expected} for sale; ${t.count} were read. Press Refresh to try again.`;
+  $('selling-note').textContent = note;
+  $('selling-note').className = 'note' + (s.error ? ' err' : note ? ' warn' : '');
+  stats.append(stat(String(t.count), 'items for sale'), stat(money(t.value, t.currency), 'total asking price'),
+               stat(money(t.average, t.currency), 'average price'), stat(String(t.likes), 'likes'));
+  const others = Object.entries(t.other_currencies || {});
+  if (others.length) stats.append(stat(others.map(([c, v]) => money(v.value, c)).join(' · '), 'in other currencies'));
+  $('selling-tools').hidden = !s.items.length;
+
+  const q = $('selling-search').value.trim().toLowerCase();
+  let items = s.items.filter(it => !q || it.title.toLowerCase().includes(q) || (it.sizes || []).join(' ').toLowerCase().includes(q));
+  const sort = $('selling-sort').value;
+  const by = { new: (a, b) => b.listed.localeCompare(a.listed), old: (a, b) => a.listed.localeCompare(b.listed),
+               high: (a, b) => b.price - a.price, low: (a, b) => a.price - b.price, likes: (a, b) => b.likes - a.likes };
+  items = items.slice().sort(by[sort] || by.new);
+  items.slice(0, shown.selling).forEach(it => {
+    const card = el('a', 'card');
+    card.href = it.url || '#'; card.target = '_blank'; card.rel = 'noreferrer'; card.title = 'Open it on Depop';
+    if (it.picture) { const img = el('img'); img.loading = 'lazy'; img.alt = ''; img.src = it.picture; card.appendChild(img); }
+    else card.appendChild(el('div', 'noimg'));
+    const body = el('div', 'body');
+    body.appendChild(el('div', 't', it.title));
+    const p = el('div', 'p', money(it.price, it.currency));
+    if (it.full_price) p.appendChild(el('s', null, money(it.full_price, it.currency)));
+    body.appendChild(p);
+    const bits = [];
+    if ((it.sizes || []).length) bits.push(it.sizes.join(', '));
+    bits.push(`♥ ${it.likes}`);
+    if (it.listed) bits.push('listed ' + niceDate(it.listed));
+    body.appendChild(el('div', 'm', bits.join(' · ')));
+    card.appendChild(body);
+    list.appendChild(card);
+  });
+  showMore('selling', items.length);
+}
+
+function renderSold() {
+  const s = S.sold;
+  const list = $('sold-list'), stats = $('sold-stats');
+  list.innerHTML = ''; stats.innerHTML = ''; $('sold-more').innerHTML = '';
+  if (!s) {
+    $('sold-pill').textContent = 'not read yet';
+    $('sold-note').textContent = 'Press Refresh to read what you have sold on Depop.';
+    $('sold-tools').hidden = true;
+    return;
+  }
+  const t = s.totals;
+  $('sold-pill').textContent = `${t.sales} sale${t.sales === 1 ? '' : 's'}`;
+  $('sold-when').textContent = 'refreshed ' + ago(s.items_from || s.synced_at);
+  $('sold-note').textContent = s.error ? 'Refresh did not work: ' + s.error + (s.items.length ? ' - showing the list from before.' : '')
+    : (t.refunded ? `${t.refunded} refunded or cancelled sale${t.refunded === 1 ? ' is' : 's are'} listed below but not counted in the totals.` : '');
+  $('sold-note').className = 'note' + (s.error ? ' err' : '');
+  stats.append(stat(String(t.sales), 'sales'), stat(String(t.items), 'items sold'),
+               stat(money(t.earned, t.currency), 'you received'), stat(money(t.gross, t.currency), 'sale prices'),
+               stat(`${money(t.this_month.earned, t.currency)}`, `this month (${t.this_month.sales} sale${t.this_month.sales === 1 ? '' : 's'})`));
+  if (t.to_ship) stats.appendChild(stat(String(t.to_ship), t.to_ship === 1 ? 'sale to ship' : 'sales to ship', true));
+  $('sold-tools').hidden = !s.items.length;
+
+  const q = $('sold-search').value.trim().toLowerCase();
+  const f = $('sold-filter').value;
+  const monthOf = (d) => `${d.getFullYear()}-${d.getMonth()}`;   // the calendar of this computer, like the totals
+  const month = monthOf(new Date());
+  const sales = s.items.filter(x => (!q || x.items.some(i => i.title.toLowerCase().includes(q)))
+    && (f !== 'to_ship' || x.to_ship) && (f !== 'month' || (x.sold_at && monthOf(new Date(x.sold_at)) === month)));
+  sales.slice(0, shown.sold).forEach(x => {
+    const row = el('div', 'sale');
+    const pics = el('div', 'pics');
+    const first = x.items[0] || {};
+    const img = el('img'); img.loading = 'lazy'; img.alt = ''; if (first.picture) img.src = first.picture;
+    pics.appendChild(img);
+    const mid = el('div');
+    mid.appendChild(el('div', 't', x.items.map(i => i.title).join(' + ') || 'Sale'));
+    const bits = ['sold ' + niceDate(x.sold_at || x.date)];
+    if (x.items.length > 1) bits.push(`bundle of ${x.items.length}`);
+    mid.appendChild(el('div', 'm', bits.join(' · ')));
+    const lost = x.status === 'refunded' || x.status === 'cancelled';
+    const pill = el('span', 'pill ' + (x.to_ship ? 'todo' : lost ? 'no' : 'ok'), x.status_label);
+    pill.style.marginTop = '6px';
+    mid.appendChild(pill);
+    const cash = el('div', 'money');
+    cash.append(el('b', null, money(x.earned, x.currency)), el('span', null, 'you received · price ' + money(x.price, x.currency)));
+    row.append(pics, mid, cash);
+    list.appendChild(row);
+  });
+  showMore('sold', sales.length);
+}
+
+function showMore(kind, total) {
+  const box = $(kind + '-more');
+  if (total <= shown[kind]) { if (total > PAGE) box.appendChild(el('span', 'note', `All ${total} shown.`)); return; }
+  const b = el('button', 'small', `Show more (${total - shown[kind]} more)`);
+  b.onclick = () => { shown[kind] += PAGE * 2; kind === 'selling' ? renderSelling() : renderSold(); };
+  box.appendChild(b);
+}
+
+async function load() {
+  S = await (await fetch('/shop/state', { cache: 'no-store' })).json();
+  renderSelling();
+  renderSold();
+  checkHelper();
+}
+
+function checkHelper() {
+  const v = helperVersion();
+  const missing = !v;
+  const old = v && v !== HELPER_VERSION;
+  $('helper-missing').hidden = !(missing || old);
+  if (old) {
+    $('helper-why').textContent = `Chrome is still running the older helper (v${v}). Open chrome://extensions, press the reload arrow on "Depop Seller helper", then reload this page.`;
+  }
+  ['selling-refresh', 'sold-refresh'].forEach(id => { $(id).disabled = missing || old; });
+}
+
+// ---- refreshing ---------------------------------------------------------------------
+// The page asks the server for a one-time pass, hands it to the Chrome helper, and the helper
+// reads the list in a background Depop tab and sends it to the server. This page just waits for
+// a newer snapshot to show up.
+async function refresh(what) {
+  const button = $(what + '-refresh');
+  const before = S[what] ? S[what].synced_at : null;
+  button.disabled = true;
+  $(what + '-note').className = 'note';
+  $(what + '-note').textContent = 'Starting…';
+  const r = await post('/shop/request', { what });
+  if (!r.ok) { $(what + '-note').className = 'note err'; $(what + '-note').textContent = r.error; button.disabled = false; return; }
+  window.postMessage({ type: 'depop-seller:shop-sync', token: r.data.token, what, server: location.origin }, '*');
+  $(what + '-note').textContent = 'Reading it from Depop in a background tab of Chrome - this can take a minute for a big shop…';
+  const started = Date.now();
+  const wait = async () => {
+    const fresh = await (await fetch('/shop/state', { cache: 'no-store' })).json();
+    const snap = fresh[what];
+    if (snap && snap.synced_at !== before) {
+      S = fresh;
+      shown[what] = PAGE;
+      what === 'selling' ? renderSelling() : renderSold();
+      button.disabled = false;
+      return;
+    }
+    if (Date.now() - started > 5 * 60 * 1000) {
+      $(what + '-note').className = 'note err';
+      $(what + '-note').textContent = 'Depop did not answer. Check that Chrome is open and you are signed in to Depop there, then press Refresh again.';
+      button.disabled = false;
+      return;
+    }
+    setTimeout(wait, 1500);
+  };
+  setTimeout(wait, 1500);
+}
+
+$('selling-refresh').onclick = () => refresh('selling');
+$('sold-refresh').onclick = () => refresh('sold');
+$('selling-search').oninput = () => { shown.selling = PAGE; renderSelling(); };
+$('selling-sort').onchange = () => { shown.selling = PAGE; renderSelling(); };
+$('sold-search').oninput = () => { shown.sold = PAGE; renderSold(); };
+$('sold-filter').onchange = () => { shown.sold = PAGE; renderSold(); };
+
+(async () => {
+  try {
+    const info = await (await fetch('/batches')).json();
+    const recent = info.batches[0];
+    syncTabs('shop', recent && recent.name, recent && recent.has_manifest);
+  } catch (e) { syncTabs('shop'); }
+})();
+load();
+setTimeout(checkHelper, 300);                  // the helper marks the page a moment after it loads
+
+// ---- closing the window closes the app ----------------------------------------------
+// Moving between tabs also unloads the page, so the server waits a few seconds and stays up if
+// another page of the app turns up, or if it is still grouping, drafting or feeding Depop.
+window.addEventListener('pagehide', (e) => {
+  if (!e.persisted) navigator.sendBeacon('/closing');
+});
+
+// ---- the app was updated while it was running ---------------------------------------
+// The pages come from disk on every request, but the routes live in the running process: after an
+// update you can be looking at a new page that the old server cannot serve. A server old enough to
+// have no /version at all is stale by definition, so a 404 here counts as "restart me" too.
+async function checkVersion() {
+  let stale = false, since = '', platform = '';
+  try {
+    const res = await fetch('/version');
+    if (res.ok) { const v = await res.json(); stale = v.stale; since = v.started; platform = v.platform; }
+    else { stale = true; }
+  } catch (e) { return; }                       // server gone: the page has bigger problems
+  if (!stale) return;
+
+  const reopen = platform === 'mac'
+    ? 'open Depop Seller again from the Dock or the folder'
+    : 'open Depop Seller again from your desktop icon';
+  const b = document.getElementById('stale-banner');
+  b.textContent = '';
+  const msg = document.createElement('span');
+  msg.textContent = 'Depop Seller has been updated'
+    + (since ? ` (this one has been running since ${since})` : '')
+    + '. Close it and open it again, or the newest tabs and buttons will not work.';
+  const btn = document.createElement('button');
+  btn.textContent = 'Close it now';
+  btn.style.cssText = 'font:inherit;padding:3px 10px;border:1px solid #fcd34d;border-radius:6px;background:#fff;cursor:pointer';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try { await fetch('/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); }
+    catch (e) { /* the server dies mid-answer, which is the point */ }
+    document.body.innerHTML = '<div style="padding:60px;text-align:center;font:16px system-ui;color:#71717a">'
+      + 'Depop Seller is closed.<br><br>Now ' + reopen + '.</div>';
+  };
+  b.append(msg, btn);
+  b.hidden = false;
+}
+checkVersion();
+</script>
+</body>
+</html>

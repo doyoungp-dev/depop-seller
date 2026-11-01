@@ -50,6 +50,10 @@ Routes:
   POST /batches/choose-folder {"purpose": "new"|"import", "start"?} -> the system's folder chooser: {"folder"|null}
   POST /batches/forget        {"name"} -> takes a batch kept elsewhere off the list (nothing on disk changes)
   POST /batches/delete        {"name"} -> the batch folder goes to the Recycle Bin / Trash, its rows leave the DB
+  GET  /shop                  the Shop page (static/shop.html): what is selling and what has sold on Depop
+  GET  /shop/state            both lists as last read, with totals worked out now (shop.state)
+  POST /shop/request          {"what": "selling"|"sold"|"both"} -> a one-time pass for the Chrome helper
+  POST /shop/import           from depop.com only: {token, selling?, sold?, counts?, error?} - what the helper read
   POST /batches/open          {"name"} -> opens the batch's raw_image folder in Explorer / Finder
   GET  /sell                  the selling page (static/sell.html)
   GET  /sell/state?batch=     items with photos + listing status/description from the DB (synced from the manifest)
@@ -395,6 +399,8 @@ class ReviewServer:
         self._lister = None
         self.describe_state: dict[str, dict] = {}
         self.white_state: dict[str, dict] = {}
+        from .shop import Requests
+        self.shop_requests = Requests()          # one-time passes for the helper's Shop refresh
         self.style_job: dict = {"running": False, "error": None, "summary": None, "diff": None, "markdown": None}
         self.started_at = datetime.now()
         self.code_mtime = code_mtime()          # to spot an update while the app is running
@@ -1054,7 +1060,7 @@ class ReviewServer:
 # server, so those routes need CORS - and only those. Everything else (including every route that
 # writes) stays same-origin, or any web page the seller has open could drive the server.
 DEPOP_ORIGINS = ("https://www.depop.com", "https://depop.com")
-CORS_PATHS = ("/sell/photos", "/sell/item", "/large/")
+CORS_PATHS = ("/sell/photos", "/sell/item", "/large/", "/shop/import")
 
 
 class ReviewHandler(BaseHTTPRequestHandler):
@@ -1091,6 +1097,10 @@ class ReviewHandler(BaseHTTPRequestHandler):
             return False
         if origin in DEPOP_ORIGINS:
             return not urlsplit(self.path).path.startswith(CORS_PATHS)
+        if origin.startswith("chrome-extension://"):
+            # the helper's background script hands over the Shop lists; they still need the
+            # one-time pass from /shop/request, so another extension gets nowhere with this
+            return urlsplit(self.path).path != "/shop/import"
         host = urlsplit(origin).hostname
         return host not in ("127.0.0.1", "localhost", "::1")
 
@@ -1131,6 +1141,12 @@ class ReviewHandler(BaseHTTPRequestHandler):
             elif path == "/hub":
                 page = (files("depop_seller") / "static" / "hub.html").read_bytes()
                 self._send(HTTPStatus.OK, page, "text/html; charset=utf-8")
+            elif path == "/shop":
+                page = (files("depop_seller") / "static" / "shop.html").read_bytes()
+                self._send(HTTPStatus.OK, page, "text/html; charset=utf-8")
+            elif path == "/shop/state":
+                from . import shop
+                self._json(shop.state() | {"refreshing": self.server_state.shop_requests.running()})
             elif path == "/style":
                 page = (files("depop_seller") / "static" / "style.html").read_bytes()
                 self._send(HTTPStatus.OK, page, "text/html; charset=utf-8")
@@ -1238,6 +1254,20 @@ class ReviewHandler(BaseHTTPRequestHandler):
             elif path == "/batches/choose-folder":
                 body = self._body()
                 self._json(self.server_state.choose_folder(str(body.get("purpose") or "new"), body.get("start")))
+            elif path == "/shop/request":
+                self._json(self.server_state.shop_requests.start(str(self._body().get("what") or "both")))
+            elif path == "/shop/import":
+                from . import shop
+                length = int(self.headers.get("Content-Length") or 0)
+                if length > 40 * 1024 * 1024:
+                    raise ValueError("far more than a shop list - refused")
+                body = self._body()
+                try:
+                    job = self.server_state.shop_requests.take(str(body.get("token") or ""))
+                except PermissionError as e:
+                    self._text(str(e), HTTPStatus.FORBIDDEN)
+                    return
+                self._json(shop.import_lists(job, body))
             elif path == "/batches/delete":
                 self._json(self.server_state.delete_batch(str(self._body().get("name") or "")))
             elif path == "/batches/forget":

@@ -1083,7 +1083,7 @@ def test_every_page_script_has_no_string_broken_across_lines():
     from importlib.resources import files as pkg_files
 
     quote, backtick = chr(39), chr(96)
-    for page in ("hub", "review", "sell", "style", "settings"):
+    for page in ("hub", "review", "sell", "shop", "style", "settings"):
         html = (pkg_files("depop_seller") / "static" / f"{page}.html").read_text(encoding="utf-8")
         script = html.split("<script>")[-1].split("</script>")[0]
         for number, line in enumerate(script.splitlines(), 1):
@@ -1299,7 +1299,7 @@ def test_every_page_uses_the_shared_design(batch):
 
     from depop_seller.review import ReviewHandler, ReviewServer, _Server
 
-    for page in ("hub", "review", "sell", "style", "settings"):
+    for page in ("hub", "review", "sell", "shop", "style", "settings"):
         html = (pkg_files("depop_seller") / "static" / f"{page}.html").read_text(encoding="utf-8")
         assert html.count('<link rel="stylesheet" href="/app.css">') == 1, page
         own = html.split("<style>")[1].split("</style>")[0]
