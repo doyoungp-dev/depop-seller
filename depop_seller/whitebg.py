@@ -20,6 +20,7 @@ import numpy as np
 from PIL import Image
 
 from . import config
+from .desktop import https_context
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +75,7 @@ def download_model(progress: Callable[[int, int], None] | None = None) -> Path:
     got = 0
     req = urllib.request.Request(MODEL_URL, headers={"User-Agent": "depop-seller"})
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp, part.open("wb") as out:
+        with urllib.request.urlopen(req, timeout=30, context=https_context()) as resp, part.open("wb") as out:
             while chunk := resp.read(1 << 16):
                 got += len(chunk)
                 if got > MODEL_BYTES * 2:

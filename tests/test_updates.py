@@ -103,6 +103,24 @@ def test_check_says_what_is_new_and_never_raises(monkeypatch):
     assert "internet" in updates.check()["reason"]
     monkeypatch.setattr(updates, "_get_json", fails(urllib.error.HTTPError(updates.LATEST_API, 403, "rate", {}, None)))
     assert "try again" in updates.check()["reason"]
+    import ssl                                         # reached GitHub but could not trust it: not "offline"
+    monkeypatch.setattr(updates, "_get_json", fails(urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate"))))
+    reason = updates.check()["reason"]
+    assert "certificate" in reason and "internet" not in reason
+
+
+def test_https_requests_trust_the_mac_s_own_certificates(monkeypatch):
+    """python.org's Python for macOS has no certificates of its own, so a plain https request
+    fails there; the app's requests use the system's store instead. Windows keeps its default."""
+    import ssl
+
+    from depop_seller import desktop
+
+    monkeypatch.setattr(desktop.os, "name", "nt")
+    assert desktop.https_context() is None
+    monkeypatch.setattr(desktop.os, "name", "posix")
+    context = desktop.https_context()
+    assert isinstance(context, ssl.SSLContext) and context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
 
 
 def test_an_update_is_checked_before_anything_is_written(tmp_path: Path, monkeypatch):

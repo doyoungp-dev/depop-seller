@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import ssl
 import subprocess
 import sys
 import webbrowser
@@ -33,6 +34,32 @@ def no_console() -> dict:
     if os.name == "nt":
         return {"creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)}
     return {}
+
+def https_context() -> ssl.SSLContext | None:
+    """The TLS context for the app's own https requests (Check for updates, Update, the White
+    Background model), or None for Python's default.
+
+    python.org's Python for macOS carries no list of trusted certificates until its "Install
+    Certificates" step is run, which no seller does - so every request failed verification and
+    Check for updates said GitHub could not be reached. truststore checks against the Mac's own
+    Keychain, as the anthropic SDK (which brings it in) already does for photo grouping; certifi's
+    bundle is the fallback. Windows' Python already reads the Windows certificate store, so there
+    nothing changes.
+    """
+    if os.name == "nt":
+        return None
+    try:
+        import truststore
+
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    except ImportError:
+        pass
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return None
 
 # Most preferred first. No --user-data-dir: the window must use the profile the extension is in.
 _MAC = [

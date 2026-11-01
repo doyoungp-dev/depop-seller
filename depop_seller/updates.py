@@ -22,6 +22,7 @@ import logging
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -32,7 +33,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 from . import __version__, config, share
-from .desktop import no_console
+from .desktop import https_context, no_console
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ def _get_json(url: str) -> dict:
         "Accept": "application/vnd.github+json",
         "User-Agent": f"DepopSeller/{__version__}",       # GitHub refuses requests without one
     })
-    with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response:
+    with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=https_context()) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
@@ -87,7 +88,11 @@ def check() -> dict:
         if e.code in (403, 429):
             return {"ok": False, "current": current, "reason": "GitHub is limiting checks right now - try again in an hour."}
         return {"ok": False, "current": current, "reason": f"GitHub answered with an error ({e.code}) - try again later."}
-    except (urllib.error.URLError, TimeoutError, OSError):
+    except (urllib.error.URLError, TimeoutError, OSError) as e:
+        if isinstance(getattr(e, "reason", e), ssl.SSLCertVerificationError):    # reached it, could not trust it
+            return {"ok": False, "current": current,
+                    "reason": "Could not confirm GitHub's security certificate, so nothing was checked - "
+                              "please report this on the project page."}
         return {"ok": False, "current": current, "reason": "Could not reach GitHub - check the internet connection."}
     except ValueError:
         return {"ok": False, "current": current, "reason": "GitHub sent something unreadable - try again later."}
@@ -173,7 +178,7 @@ def _download(url: str, dest: Path) -> None:
         raise ValueError("refusing to download an update from outside this project's releases")
     request = urllib.request.Request(url, headers={"User-Agent": f"DepopSeller/{__version__}"})
     size = 0
-    with urllib.request.urlopen(request, timeout=TIMEOUT_S) as response, dest.open("wb") as out:
+    with urllib.request.urlopen(request, timeout=TIMEOUT_S, context=https_context()) as response, dest.open("wb") as out:
         while chunk := response.read(64 * 1024):
             size += len(chunk)
             if size > MAX_DOWNLOAD:

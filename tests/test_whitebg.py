@@ -218,7 +218,7 @@ def test_model_download_is_verified_and_never_half_installed(tmp_path, monkeypat
     monkeypatch.setattr(whitebg, "MODEL_SHA256", hashlib.sha256(payload).hexdigest())
     asked: list[str] = []
 
-    def fake_open(req, timeout=0):
+    def fake_open(req, timeout=0, context=None):
         asked.append(req.full_url)
         return FakeResponse(fake_open.data)
 
