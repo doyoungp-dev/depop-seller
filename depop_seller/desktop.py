@@ -123,6 +123,72 @@ def open_folder(path: Path) -> None:
         subprocess.run(["xdg-open", str(path)], check=False)
 
 
+# The page cannot ask the browser for a real folder path, so the server opens the system's own
+# folder chooser and hands back what the seller picked. Text goes in through the environment
+# (Windows) or argv (macOS), never pasted into the script, so quotes in a path cannot break it.
+_WINDOWS_PICKER = r"""
+Add-Type -AssemblyName System.Windows.Forms
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+$owner = New-Object System.Windows.Forms.Form
+$owner.TopMost = $true
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = $env:DEPOP_PICK_PROMPT
+$dialog.ShowNewFolderButton = $true
+if ($env:DEPOP_PICK_START -and (Test-Path -LiteralPath $env:DEPOP_PICK_START)) { $dialog.SelectedPath = $env:DEPOP_PICK_START }
+if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($dialog.SelectedPath) }
+"""
+
+_MAC_PICKER = [
+    "on run argv",
+    "activate",
+    "try",
+    "if (count of argv) > 1 then",
+    "set chosen to choose folder with prompt (item 1 of argv) default location (POSIX file (item 2 of argv))",
+    "else",
+    "set chosen to choose folder with prompt (item 1 of argv)",
+    "end if",
+    "on error number -128",                     # Cancel
+    "return \"\"",
+    "end try",
+    "return POSIX path of chosen",
+    "end run",
+]
+
+
+def folder_picker_command(prompt: str, start: Path | None) -> tuple[list[str], dict]:
+    """The command that shows this system's folder chooser, and extra keyword arguments for it."""
+    start_ok = start is not None and Path(start).is_dir()
+    if sys.platform == "win32":
+        env = {**os.environ, "DEPOP_PICK_PROMPT": prompt, "DEPOP_PICK_START": str(start) if start_ok else ""}
+        return (["powershell", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-Command", _WINDOWS_PICKER],
+                {"env": env, **no_console()})
+    if sys.platform == "darwin":
+        cmd = ["osascript"]
+        for line in _MAC_PICKER:
+            cmd += ["-e", line]
+        return cmd + [prompt] + ([str(start)] if start_ok else []), {}
+    cmd = ["zenity", "--file-selection", "--directory", "--title", prompt]
+    if start_ok:
+        cmd += ["--filename", str(start) + os.sep]
+    return cmd, {}
+
+
+def choose_folder(prompt: str, start: Path | None = None) -> Path | None:
+    """Show the system's folder chooser; the folder picked, or None if the seller cancelled."""
+    cmd, extra = folder_picker_command(prompt, start)
+    try:
+        done = subprocess.run(cmd, capture_output=True, timeout=30 * 60, check=False, **extra)
+    except FileNotFoundError as e:
+        raise RuntimeError("this computer has no folder chooser the app can open") from e
+    except subprocess.TimeoutExpired:
+        return None
+    chosen = done.stdout.decode("utf-8", "replace").strip()
+    if not chosen:                                   # cancelled (zenity and osascript-on-error exit non-zero)
+        return None
+    folder = Path(chosen)                            # pathlib drops a trailing slash, keeps D:\ whole
+    return folder if folder.is_dir() else None
+
+
 def windows_desktop_dir() -> Path | None:
     """The real Desktop, which OneDrive's folder backup often moves out of the home directory."""
     if os.name != "nt":

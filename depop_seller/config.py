@@ -177,13 +177,97 @@ class BatchPaths:
         return self.root / "sort_image"
 
 
+# Batches live in PRODUCT_IMAGE_DIR unless the seller chose another folder for one (the Desktop,
+# Downloads, an external drive...). Those are listed here by name - the name is still what the
+# whole app, the URLs and the database know a batch by, so it stays unique across both places.
+# The list sits inside the default batches folder, so it travels with the data folder; the
+# batches it points to do not, since they live wherever the seller put them.
+ELSEWHERE_FILE = "batches-elsewhere.json"
+
+
+def _elsewhere_file() -> Path:
+    return PRODUCT_IMAGE_DIR / ELSEWHERE_FILE
+
+
+def batches_elsewhere() -> dict[str, Path]:
+    """name -> batch folder, for every batch kept outside the default folder (found or not)."""
+    try:
+        saved = json.loads(_elsewhere_file().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(k): Path(v) for k, v in (saved.get("batches") or {}).items() if v}
+
+
+def last_batch_location() -> Path:
+    """The folder the last new batch went into, so the next one offers the same place."""
+    try:
+        saved = json.loads(_elsewhere_file().read_text(encoding="utf-8")).get("last_location")
+    except (OSError, ValueError):
+        saved = None
+    return Path(saved) if saved and Path(saved).is_dir() else PRODUCT_IMAGE_DIR
+
+
+def _save_elsewhere(batches: dict[str, Path], last_location: Path | None = None) -> None:
+    f = _elsewhere_file()
+    f.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        current = json.loads(f.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        current = {}
+    data = {"batches": {k: str(v) for k, v in sorted(batches.items())},
+            "last_location": str(last_location) if last_location else current.get("last_location")}
+    tmp = f.with_name(f.name + ".part")
+    tmp.write_text(json.dumps(data, indent=2) + chr(10), encoding="utf-8")
+    tmp.replace(f)
+
+
+def remember_batch(name: str, root: Path) -> None:
+    """Note a batch that lives outside the default folder (and that folder as the next default)."""
+    batches = batches_elsewhere()
+    batches[name] = Path(root)
+    _save_elsewhere(batches, last_location=Path(root).parent)
+
+
+def forget_batch(name: str) -> None:
+    """Take a batch off the list. Its folder and photos are never touched."""
+    batches = batches_elsewhere()
+    if batches.pop(name, None) is not None:
+        _save_elsewhere(batches)
+
+
+def rename_batch_record(old: str, new: str, root: Path) -> None:
+    """A batch kept elsewhere was renamed in place: list it under its new name."""
+    batches = batches_elsewhere()
+    if batches.pop(old, None) is not None:
+        batches[new] = Path(root)
+        _save_elsewhere(batches)
+
+
+def set_last_batch_location(folder: Path) -> None:
+    _save_elsewhere(batches_elsewhere(), last_location=Path(folder))
+
+
+def is_batch_folder(root: Path) -> bool:
+    return (Path(root) / "raw_image").is_dir()
+
+
 def batch_dirs() -> list[Path]:
-    """Every batch folder, oldest first. Names are free text, so "newest" means the folder whose
-    photos were added or changed most recently - not the alphabetically last name."""
-    if not PRODUCT_IMAGE_DIR.is_dir():
-        return []
-    dirs = [p for p in PRODUCT_IMAGE_DIR.iterdir() if (p / "raw_image").is_dir()]
-    return sorted(dirs, key=lambda p: ((p / "raw_image").stat().st_mtime, p.name))
+    """Every batch folder, oldest first: the default folder's and the ones kept elsewhere. Names
+    are free text, so "newest" means the folder whose photos were added or changed most
+    recently - not the alphabetically last name."""
+    dirs: dict[str, Path] = {}
+    if PRODUCT_IMAGE_DIR.is_dir():
+        dirs = {p.name: p for p in PRODUCT_IMAGE_DIR.iterdir() if is_batch_folder(p)}
+    for name, root in batches_elsewhere().items():
+        if name not in dirs and root.name == name and is_batch_folder(root):
+            dirs[name] = root
+    return sorted(dirs.values(), key=lambda p: ((p / "raw_image").stat().st_mtime, p.name))
+
+
+def missing_batches() -> dict[str, Path]:
+    """Batches on the elsewhere list whose folder is gone - moved, deleted, or on a drive that is
+    not plugged in."""
+    return {name: root for name, root in batches_elsewhere().items() if not is_batch_folder(root)}
 
 
 def batch_paths(batch: str | None = None) -> BatchPaths:
@@ -193,9 +277,17 @@ def batch_paths(batch: str | None = None) -> BatchPaths:
         if not candidates:
             raise FileNotFoundError(f"no batch folders with a raw_image/ subfolder under {PRODUCT_IMAGE_DIR}")
         batch = candidates[-1].name
-    as_path = Path(batch)
-    root = as_path if as_path.is_dir() else PRODUCT_IMAGE_DIR / batch  # a full folder path also works
-    if not (root / "raw_image").is_dir():
+    root = PRODUCT_IMAGE_DIR / batch
+    if not is_batch_folder(root):
+        elsewhere = batches_elsewhere().get(batch)
+        if elsewhere is not None:
+            if not is_batch_folder(elsewhere):
+                raise FileNotFoundError(f"the folder of {batch} is not at {elsewhere} any more - "
+                                        "was it moved, or is its drive unplugged?")
+            root = elsewhere
+        elif is_batch_folder(Path(batch)):                  # a folder path also works (the CLI)
+            root = Path(batch)
+    if not is_batch_folder(root):
         raise FileNotFoundError(f"no raw_image folder under {root}")
     return BatchPaths(batch=root.name, root=root)
 

@@ -32,6 +32,13 @@
     color: var(--muted); padding: 4px 10px; font-size: 12.5px;
   }
   .batch .tools-more button:hover { background: var(--surface-3); color: var(--text); border-color: transparent; }
+  button.place { display: inline-flex; align-items: center; gap: 7px; max-width: 280px; }
+  button.place svg { color: var(--primary); flex: none; }
+  button.place span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #place-reset { margin-left: 8px; }
+  .batch .where { font-size: 12.5px; color: var(--muted); margin-top: 3px; word-break: break-all; }
+  .batch .where code { font-size: 12px; }
+  .missing-list .row { justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
 </style>
 </head>
 <body>
@@ -50,13 +57,19 @@
 <main>
   <div class="panel">
     <h2>New batch</h2>
-    <div class="muted">Call it whatever you like - a date, <i>Autumn knits</i>, <i>Sunday haul</i>. Photos live in
-      <code id="root"></code>, one folder per batch; the photos themselves are never changed.</div>
+    <div class="muted">Call it whatever you like - a date, <i>Autumn knits</i>, <i>Sunday haul</i>. Each batch is a
+      folder with that name, kept wherever you choose; the photos themselves are never changed.</div>
     <p class="row" style="margin:10px 0 0">
       <input type="text" id="new-name" placeholder="Batch name" style="width:220px">
+      <button class="place" id="btn-place" title="Choose where to keep this batch">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 5.5A1.5 1.5 0 0 1 3.5 4h4.2l1.6 1.8h7.2A1.5 1.5 0 0 1 18 7.3v7.2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5z"/></svg>
+        <span id="place-label">Usual place</span>
+      </button>
       <button class="primary" id="btn-new">Create batch</button>
       <span id="new-status" class="muted"></span>
     </p>
+    <div class="note">Kept in <code id="place-path"></code>
+      <a href="#" id="place-reset" hidden>use the usual place</a></div>
     <div class="dropzone" id="new-drop" style="margin-top:10px">
       Drop photos here to create a batch with them &middot; or use <b>Add photos</b> on a batch below
     </div>
@@ -97,15 +110,62 @@ async function load() {
   INFO = await (await fetch('/batches')).json();
   const recent = INFO.batches[0];
   syncTabs('batches', recent && recent.name, recent && recent.has_manifest);
-  $('root').textContent = INFO.product_image_dir || 'product_image';
+  if (PLACE === null) PLACE = INFO.new_batch_location || INFO.product_image_dir;
+  showPlace();
   const box = $('batches');
   box.innerHTML = '';
   if (!INFO.batches.length) {
     box.appendChild(el('div', 'panel muted', 'No batches yet. Name one above, create it, then drop your photos on it.'));
-    return;
   }
   INFO.batches.forEach(b => box.appendChild(batchCard(b)));
+  if (INFO.missing && INFO.missing.length) box.appendChild(missingPanel(INFO.missing));
 }
+
+// A batch whose folder was moved, deleted, or sits on a drive that is not plugged in.
+function missingPanel(missing) {
+  const panel = el('div', 'panel missing-list');
+  panel.appendChild(el('h2', null, 'Batches the app cannot find'));
+  panel.appendChild(el('div', 'muted', 'Their folders are not where they were - moved, deleted, or on a drive that is not plugged in. Plug the drive back in and press Reload. If you moved a folder, create a batch with the same name in its new place and the app finds it again. Or take it off this list - nothing on your computer is deleted.'));
+  missing.forEach(m => {
+    const row = el('div', 'row');
+    const what = el('div');
+    what.appendChild(el('b', null, m.name));
+    what.appendChild(el('div', 'muted', m.folder));
+    const forget = el('button', 'small', 'Remove from list');
+    forget.onclick = async () => { if (await post('/batches/forget', { name: m.name })) await load(); };
+    row.append(what, forget);
+    panel.appendChild(row);
+  });
+  return panel;
+}
+
+// ---- where a new batch is kept ------------------------------------------------------
+// The browser cannot hand the page a real folder path, so the app opens this computer's own
+// folder chooser (Explorer on Windows, Finder on a Mac) and says what was picked.
+let PLACE = null;
+
+function folderName(path) {
+  const parts = String(path || '').split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : path;
+}
+
+function showPlace() {
+  const usual = PLACE === INFO.product_image_dir;
+  $('place-label').textContent = usual ? 'Usual place' : folderName(PLACE);
+  $('place-path').textContent = PLACE;
+  $('place-reset').hidden = usual;
+}
+
+$('btn-place').onclick = async () => {
+  $('btn-place').disabled = true;
+  $('new-status').textContent = 'Choose a folder in the window that opened…';
+  const r = await post('/batches/choose-folder', { purpose: 'new', start: PLACE });
+  $('btn-place').disabled = false;
+  $('new-status').textContent = '';
+  if (r && r.folder) { PLACE = r.folder; showPlace(); }
+};
+
+$('place-reset').onclick = (e) => { e.preventDefault(); PLACE = INFO.product_image_dir; showPlace(); };
 
 function batchCard(b) {
   const card = el('section', 'batch');
@@ -131,12 +191,22 @@ function batchCard(b) {
   if (b.has_manifest) bits.push(`${b.items} items`, `${b.listed} listed`);
   bits.push('updated ' + b.updated);
   mid.appendChild(el('div', 'muted', bits.join('  ·  ')));
+  if (b.elsewhere || !b.photos) {
+    const where = el('div', 'where');
+    where.append(b.photos ? 'Kept in ' : 'Put its photos in ', el('code', null, b.photos ? b.folder : b.photo_folder));
+    where.title = 'Open folder shows it';
+    mid.appendChild(where);
+  }
   const track = el('div', 'bar-track'); track.hidden = true;
   const fill = el('div', 'bar-fill');
   track.appendChild(fill);
   const note = el('div', 'note');
   mid.append(track, note);
   if (b.error) { note.className = 'note err'; note.textContent = b.error; }
+  else if (b.loose_photos) {
+    note.className = 'note warn';
+    note.textContent = `${b.loose_photos} photo${b.loose_photos === 1 ? ' is' : 's are'} in the batch folder itself - move ${b.loose_photos === 1 ? 'it' : 'them'} into its raw_image folder (Open folder shows it) to add ${b.loose_photos === 1 ? 'it' : 'them'} to the batch.`;
+  }
   card.appendChild(mid);
 
   // the next step for this batch is the big button; housekeeping sits quietly underneath
@@ -198,7 +268,7 @@ function bindDrop(node, batch, note) {
     let target = batch;
     if (target === null) {                       // dropped on the "new batch" zone
       const name = ($('new-name').value || '').trim() || today();
-      const made = await post('/batches/new', { name });
+      const made = await post('/batches/new', { name, location: PLACE });
       if (!made) return;
       await load();
       target = made.name;
@@ -258,7 +328,14 @@ async function upload(batch, fileList, note) {
 }
 
 async function importFolder(b, note) {
-  const folder = prompt(`Copy every photo from a folder on this computer into "${b.name}".\n\nPaste the folder's full path:`);
+  note.className = 'note';
+  note.textContent = 'Choose the folder of photos in the window that opened…';
+  const picked = await post('/batches/choose-folder', { purpose: 'import' });
+  note.textContent = '';
+  let folder = picked && picked.folder;
+  if (!picked) {                                 // no folder chooser here: fall back to typing it
+    folder = prompt(`Copy every photo from a folder on this computer into "${b.name}".\n\nPaste the folder's full path:`);
+  }
   if (!folder) return;
   note.className = 'note';
   note.textContent = 'Copying…';
@@ -311,12 +388,11 @@ async function renameBatch(b) {
 $('btn-new').onclick = async () => {
   const name = ($('new-name').value || '').trim();
   if (!name) { $('new-status').textContent = 'Type a name first.'; return; }
-  const made = await post('/batches/new', { name });
+  const made = await post('/batches/new', { name, location: PLACE });
   if (!made) { $('new-status').textContent = ''; return; }
-  $('new-status').textContent = 'Created - now add its photos.';
+  $('new-status').textContent = `Created "${made.name}" - add its photos now or later.`;
   $('new-name').value = '';
   await load();
-  pickFiles(made.name);
 };
 $('btn-reload').onclick = load;
 bindDrop($('new-drop'), null, null);

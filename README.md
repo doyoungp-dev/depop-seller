@@ -84,7 +84,7 @@ Applications to the Trash - your data folder stays where it is.
 
 | Tab | |
 |---|---|
-| **Batches** | Name a batch - a date, "Autumn knits", anything - drop its photos on it, press **Group with Claude**. |
+| **Batches** | Name a batch - a date, "Autumn knits", anything - and, with the folder button next to the name, choose where it is kept: the usual place, the Desktop, Downloads, an external drive. Drop its photos on it (or put them in its folder later), press **Group with Claude**. |
 | **Review** | Drag photos between items and into order. Delete what you don't want; nothing on disk is ever deleted. |
 | **Sell** | Type a line of facts per item, tick items, **Generate Selected Descriptions**. Then **Depop** on each item. Tick **Listed** once it's posted. |
 | **Style** | Tell Claude how descriptions should change, see exactly what changes, accept or discard. Every version is kept. |
@@ -105,7 +105,7 @@ The only things that ever leave your computer:
 
 Pressing **Check for updates** asks GitHub for the newest version number; nothing of yours is sent.
 
-To use the app on another computer, install it there and copy that one folder across.
+To use the app on another computer, install it there and copy that one folder across. Batches you chose to keep somewhere else stay where you put them - copy those folders too, and on the new computer create a batch with the same name in the folder you copied them to: the app finds the batch that is already there.
 
 ## Updating
 

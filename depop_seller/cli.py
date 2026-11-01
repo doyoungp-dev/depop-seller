@@ -26,14 +26,18 @@ def cmd_check(_: argparse.Namespace) -> int:
     key = load_api_key()
     print(f"ANTHROPIC_API_KEY: {'found (...' + key[-4:] + ')' if key else 'NOT FOUND - set it in the environment or in .env'}")
     print(f"database: {DB_PATH} ({'exists' if DB_PATH.exists() else 'not created yet'})")
+    from .config import batch_dirs, missing_batches
+
     print(f"product_image: {PRODUCT_IMAGE_DIR}")
-    if PRODUCT_IMAGE_DIR.is_dir():
-        for d in sorted(p for p in PRODUCT_IMAGE_DIR.iterdir() if (p / "raw_image").is_dir()):
-            b = BatchPaths(d.name, d)
-            raw = sum(1 for p in b.raw.iterdir() if p.is_file())
-            sorted_n = sum(1 for p in b.sort_image.glob("*.jpg")) if b.sort_image.is_dir() else 0
-            print(f"  {d.name}: {raw} raw, manifest {'yes' if b.manifest.exists() else 'no'}, "
-                  f"review {'yes' if b.review_html.exists() else 'no'}, sort_image {sorted_n}")
+    for name, folder in missing_batches().items():
+        print(f"  {name}: MISSING - its folder is not at {folder} any more")
+    for d in sorted(batch_dirs(), key=lambda p: p.name):
+        b = BatchPaths(d.name, d)
+        raw = sum(1 for p in b.raw.iterdir() if p.is_file())
+        sorted_n = sum(1 for p in b.sort_image.glob("*.jpg")) if b.sort_image.is_dir() else 0
+        where = "" if d.parent == PRODUCT_IMAGE_DIR else f" (kept in {d.parent})"
+        print(f"  {d.name}{where}: {raw} raw, manifest {'yes' if b.manifest.exists() else 'no'}, "
+              f"review {'yes' if b.review_html.exists() else 'no'}, sort_image {sorted_n}")
     return 0
 
 

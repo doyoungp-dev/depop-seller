@@ -46,8 +46,10 @@ Routes:
   POST /apply?batch=          {"force": bool}  -> apply step in a background thread
   GET  /apply/status?batch=   {"running", "done", "total", "written", "error"}
   GET  /hub                   the batches page (static/hub.html): every date folder, its status, Review / Sell links
-  POST /batches/new           {"name": "YYYYMMDD"} -> creates product_image/<name>/raw_image
-  POST /batches/open          {"name"} -> opens the batch's raw_image folder in Explorer
+  POST /batches/new           {"name", "location"?} -> creates <location or product_image>/<name>/raw_image
+  POST /batches/choose-folder {"purpose": "new"|"import", "start"?} -> the system's folder chooser: {"folder"|null}
+  POST /batches/forget        {"name"} -> takes a batch kept elsewhere off the list (nothing on disk changes)
+  POST /batches/open          {"name"} -> opens the batch's raw_image folder in Explorer / Finder
   GET  /sell                  the selling page (static/sell.html)
   GET  /sell/state?batch=     items with photos + listing status/description from the DB (synced from the manifest)
   POST /sell/open?batch=&item=   open Depop's listing form in the listing browser with the item's photos
@@ -108,6 +110,26 @@ HANDOFF_QUIET_S = 120       # after handing an item to the Depop helper, stay up
 PHOTO_SUFFIXES = {".heic", ".heif", ".jpg", ".jpeg", ".png", ".webp"}
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024          # one photo; a HEIC is about 4 MB
 _RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+
+
+def _same_place_key(path: Path) -> str:
+    """A folder's identity for comparing places: resolved, and case-blind where the OS is."""
+    return os.path.normcase(str(Path(path).resolve()))
+
+
+def check_batch_location(place: Path) -> None:
+    """Refuse a folder no batch may live in: the app's own folder (an update or the installer
+    replaces everything there, so the photos would go with it), or the inside of another batch."""
+    here = Path(_same_place_key(place))
+    app_folders = [config.PROJECT_ROOT] + ([config.PROJECT_ROOT.parent] if config.bundled_runtime() else [])
+    for app in app_folders:
+        if here == Path(_same_place_key(app)) or Path(_same_place_key(app)) in here.parents:
+            raise ValueError("that folder is part of the Depop Seller app itself, which updates replace - "
+                             "choose another place, such as Documents or the Desktop")
+    for batch in config.batch_dirs():
+        b = Path(_same_place_key(batch))
+        if here == b or b in here.parents:
+            raise ValueError(f"that folder is inside the batch {batch.name} - choose a place outside it")
 
 
 def safe_batch_name(name: str) -> str:
@@ -603,52 +625,109 @@ class ReviewServer:
 
     def batches(self) -> dict:
         out = []
-        if config.PRODUCT_IMAGE_DIR.is_dir():
-            conn = db.connect()
-            try:
-                for d in reversed(config.batch_dirs()):          # most recently used first
-                    b = BatchPaths(d.name, d)
-                    raw_files = [p for p in b.raw.iterdir() if p.is_file() and p.suffix.lower() in PHOTO_SUFFIXES]
-                    entry = {
-                        "name": d.name,
-                        "photos": len(raw_files),
-                        "updated": datetime.fromtimestamp(b.raw.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
-                        "has_manifest": b.manifest.exists(),
-                        "sorted": sum(1 for p in b.sort_image.glob("*.jpg")) if b.sort_image.is_dir() else 0,
-                        "items": 0, "listed": 0,
-                    }
-                    if entry["has_manifest"]:
-                        try:
-                            entry["items"] = len(items(self.session(d.name).rows))
-                            entry["listed"] = sum(1 for m in db.item_rows(conn, d.name).values() if m.get("status") == "listed")
-                        except Exception as e:  # a broken manifest must not hide the whole list
-                            entry["error"] = str(e)
-                    out.append(entry)
-            finally:
-                conn.close()
+        default = _same_place_key(config.PRODUCT_IMAGE_DIR)
+        conn = db.connect()
+        try:
+            for d in reversed(config.batch_dirs()):          # most recently used first
+                b = BatchPaths(d.name, d)
+                raw_files = [p for p in b.raw.iterdir() if p.is_file() and p.suffix.lower() in PHOTO_SUFFIXES]
+                loose = [p for p in d.iterdir() if p.is_file() and p.suffix.lower() in PHOTO_SUFFIXES]
+                entry = {
+                    "name": d.name,
+                    "folder": str(d),
+                    "photo_folder": str(b.raw),
+                    "elsewhere": _same_place_key(d.parent) != default,
+                    "loose_photos": len(loose),           # put next to raw_image instead of inside it
+                    "photos": len(raw_files),
+                    "updated": datetime.fromtimestamp(b.raw.stat().st_mtime).strftime("%Y-%m-%d %H:%M"),
+                    "has_manifest": b.manifest.exists(),
+                    "sorted": sum(1 for p in b.sort_image.glob("*.jpg")) if b.sort_image.is_dir() else 0,
+                    "items": 0, "listed": 0,
+                }
+                if entry["has_manifest"]:
+                    try:
+                        entry["items"] = len(items(self.session(d.name).rows))
+                        entry["listed"] = sum(1 for m in db.item_rows(conn, d.name).values() if m.get("status") == "listed")
+                    except Exception as e:  # a broken manifest must not hide the whole list
+                        entry["error"] = str(e)
+                out.append(entry)
+        finally:
+            conn.close()
         from .group import COST_PER_PHOTO
         return {"batches": out, "api_key": load_api_key() is not None, "models": MODELS,
                 "cost_per_photo": COST_PER_PHOTO, "default_model": DEFAULT_MODEL,
                 "extension_dir": str(config.PROJECT_ROOT / "chrome_extension"),
-                "product_image_dir": str(config.PRODUCT_IMAGE_DIR)}
+                "product_image_dir": str(config.PRODUCT_IMAGE_DIR),
+                "new_batch_location": str(config.last_batch_location()),
+                "missing": [{"name": n, "folder": str(p)} for n, p in sorted(config.missing_batches().items())]}
 
-    def new_batch(self, name: str) -> dict:
+    def _name_taken(self, name: str) -> bool:
+        return name in {d.name for d in config.batch_dirs()} or name in config.batches_elsewhere()
+
+    def new_batch(self, name: str, location: str | None = None) -> dict:
+        """Make an empty batch - in the usual folder, or in any folder the seller picked. Its photos
+        come later: dropped on its card, or put into its photo folder by hand."""
         name = safe_batch_name(name)
-        root = config.PRODUCT_IMAGE_DIR / name
-        if root.exists():
+        place = Path(location.strip()).expanduser() if location and location.strip() else config.PRODUCT_IMAGE_DIR
+        if not place.is_absolute():
+            raise ValueError("choose the folder with the folder button")
+        # A batch the app lost track of (its folder moved, or the data folder came from another
+        # computer) is found again by creating it, under its own name, where its folder now is.
+        found_again = name in config.missing_batches() and config.is_batch_folder(place / name)
+        if self._name_taken(name) and not found_again:
             raise ValueError(f"a batch called {name} already exists")
-        (root / "raw_image").mkdir(parents=True)
-        log.info("created batch %s", name)
-        return {"name": name, "raw": str(root / "raw_image")}
+        default = _same_place_key(config.PRODUCT_IMAGE_DIR)
+        elsewhere = _same_place_key(place) != default
+        if elsewhere:
+            if not place.is_dir():
+                raise FileNotFoundError(f"{place} is not a folder on this computer")
+            check_batch_location(place)
+        root = place / name
+        if root.exists() and not config.is_batch_folder(root):
+            if not root.is_dir() or any(root.iterdir()):
+                raise ValueError(f"{place} already has a folder called {name} with other things in it - "
+                                 "choose another name or another place")
+        (root / "raw_image").mkdir(parents=True, exist_ok=True)   # an empty folder of that name is used as is
+        if elsewhere:
+            config.remember_batch(name, root)
+        else:
+            config.set_last_batch_location(config.PRODUCT_IMAGE_DIR)
+        log.info("created batch %s in %s", name, place)
+        return {"name": name, "folder": str(root), "raw": str(root / "raw_image"), "elsewhere": elsewhere}
+
+    def choose_folder(self, purpose: str, start: str | None = None) -> dict:
+        """Open the system's folder chooser on this computer and say what was picked (None if
+        cancelled). It is a dialog on the seller's own screen, opened for the seller's own page -
+        other sites cannot ask for it, as every POST from another origin is refused."""
+        prompts = {
+            "new": "Choose where to keep the new batch. Depop Seller makes a folder with the batch's name inside it.",
+            "import": "Choose a folder of photos to copy into this batch. The photos there are left as they are.",
+        }
+        if purpose not in prompts:
+            raise ValueError(f"unknown purpose {purpose!r}")
+        first = Path(start) if start else (config.last_batch_location() if purpose == "new" else Path.home())
+        chosen = desktop.choose_folder(prompts[purpose], first)
+        if chosen is not None and purpose == "new":
+            check_batch_location(chosen)
+        return {"folder": str(chosen) if chosen else None}
+
+    def forget_batch(self, name: str) -> dict:
+        """Take a batch kept elsewhere off the list - typically one whose folder has gone. Nothing
+        on disk is touched; choosing its folder again as a new batch's place brings it back."""
+        if name not in config.batches_elsewhere():
+            raise LookupError(f"{name} is not a batch kept outside the usual folder")
+        config.forget_batch(name)
+        self.sessions.pop(name, None)
+        return {"forgotten": name}
 
     def rename_batch(self, name: str, to: str) -> dict:
-        """Rename a batch folder and carry its rows in the DB across."""
+        """Rename a batch folder where it lives and carry its rows in the DB across."""
         to = safe_batch_name(to)
         paths = batch_paths(name)
         if to == paths.batch:
             return {"name": to}
-        target = config.PRODUCT_IMAGE_DIR / to
-        if target.exists():
+        target = paths.root.parent / to
+        if target.exists() or self._name_taken(to):
             raise ValueError(f"a batch called {to} already exists")
         with self.lock:
             if self.group_state.get(paths.batch, {}).get("running"):
@@ -659,6 +738,7 @@ class ReviewServer:
             if self.white_state.get(paths.batch, {}).get("running"):
                 raise RuntimeError("photos of this batch are being put on white right now")
             paths.root.rename(target)
+            config.rename_batch_record(paths.batch, to, target)
             self.sessions.pop(paths.batch, None)
             self.group_state.pop(paths.batch, None)
             self.white_state.pop(paths.batch, None)
@@ -1121,7 +1201,13 @@ class ReviewHandler(BaseHTTPRequestHandler):
                 model = self._body().get("model") or DEFAULT_MODEL
                 self._json(self.server_state.start_group(batch, model), HTTPStatus.ACCEPTED)
             elif path == "/batches/new":
-                self._json(self.server_state.new_batch(str(self._body().get("name") or "")))
+                body = self._body()
+                self._json(self.server_state.new_batch(str(body.get("name") or ""), body.get("location")))
+            elif path == "/batches/choose-folder":
+                body = self._body()
+                self._json(self.server_state.choose_folder(str(body.get("purpose") or "new"), body.get("start")))
+            elif path == "/batches/forget":
+                self._json(self.server_state.forget_batch(str(self._body().get("name") or "")))
             elif path == "/batches/open":
                 self._json(self.server_state.open_batch_folder(str(self._body().get("name") or "")))
             elif path.startswith("/settings/"):
