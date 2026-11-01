@@ -4,8 +4,8 @@
 the descriptions are written in your own style, and Depop's listing form opens with everything
 filled in. You check it and press Post.
 
-[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-v1.1.2-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSellerSetup.exe)
-[![Download for Mac](https://img.shields.io/badge/Download%20for%20Mac-v1.1.2-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSeller-Mac.zip)
+[![Download for Windows](https://img.shields.io/badge/Download%20for%20Windows-v1.1.3-4c62cf?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSellerSetup.exe)
+[![Download for Mac](https://img.shields.io/badge/Download%20for%20Mac-v1.1.3-4c62cf?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/doyoungp-dev/depop_seller/releases/latest/download/DepopSeller-Mac.zip)
 
 *For my beloved wife, and for our friends. Enjoy the app!*
 
