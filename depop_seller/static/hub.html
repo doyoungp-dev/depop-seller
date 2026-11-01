@@ -32,10 +32,9 @@
     color: var(--muted); padding: 4px 10px; font-size: 12.5px;
   }
   .batch .tools-more button:hover { background: var(--surface-3); color: var(--text); border-color: transparent; }
-  button.place { display: inline-flex; align-items: center; gap: 7px; max-width: 280px; }
+  .place-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  button.place { display: inline-flex; align-items: center; gap: 7px; }
   button.place svg { color: var(--primary); flex: none; }
-  button.place span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #place-reset { margin-left: 8px; }
   .batch .where { font-size: 12.5px; color: var(--muted); margin-top: 3px; word-break: break-all; }
   .batch .where code { font-size: 12px; }
   .missing-list .row { justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
@@ -61,15 +60,19 @@
       folder with that name, kept wherever you choose; the photos themselves are never changed.</div>
     <p class="row" style="margin:10px 0 0">
       <input type="text" id="new-name" placeholder="Batch name" style="width:220px">
-      <button class="place" id="btn-place" title="Choose where to keep this batch">
-        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 5.5A1.5 1.5 0 0 1 3.5 4h4.2l1.6 1.8h7.2A1.5 1.5 0 0 1 18 7.3v7.2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5z"/></svg>
-        <span id="place-label">Usual place</span>
-      </button>
       <button class="primary" id="btn-new">Create batch</button>
       <span id="new-status" class="muted"></span>
     </p>
-    <div class="note">Kept in <code id="place-path"></code>
-      <a href="#" id="place-reset" hidden>use the usual place</a></div>
+    <div class="place-row">
+      <span class="muted">Save in:</span>
+      <b id="place-label">the usual place</b>
+      <button class="place" id="btn-place" title="Choose where to keep this batch">
+        <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M2 5.5A1.5 1.5 0 0 1 3.5 4h4.2l1.6 1.8h7.2A1.5 1.5 0 0 1 18 7.3v7.2a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 2 14.5z"/></svg>
+        Choose folder…
+      </button>
+      <a href="#" id="place-reset" hidden>back to the usual place</a>
+    </div>
+    <div class="note"><code id="place-path"></code></div>
     <div class="dropzone" id="new-drop" style="margin-top:10px">
       Drop photos here to create a batch with them &middot; or use <b>Add photos</b> on a batch below
     </div>
@@ -151,7 +154,7 @@ function folderName(path) {
 
 function showPlace() {
   const usual = PLACE === INFO.product_image_dir;
-  $('place-label').textContent = usual ? 'Usual place' : folderName(PLACE);
+  $('place-label').textContent = usual ? 'the usual place' : folderName(PLACE);
   $('place-path').textContent = PLACE;
   $('place-reset').hidden = usual;
 }
