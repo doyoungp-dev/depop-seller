@@ -100,7 +100,7 @@
       <li>Press <b>Copy</b> here, then click <b>Load unpacked</b>, paste into the <b>Folder</b> box at the
         bottom of the window that opens, and press <b>Select Folder</b>:<br><code id="ext-dir"></code>
         <button class="small" data-copy="ext-dir">Copy</button></li>
-      <li>Come back here and press <b>Reload</b>.</li>
+      <li>It shows up as <b>Depop Seller</b> with the hanger logo. Come back here and press <b>Reload</b>.</li>
     </ol>
     <div class="note" id="ext-note"></div>
   </div>
@@ -519,7 +519,7 @@ $('un-continue').onclick = async () => {
   box.appendChild(el('p', null, `It has closed, and in a few seconds its files go to ${r.data.bin}. You can close this window.`));
   if (r.data.keeps_data && r.data.data_folder) box.appendChild(el('p', null, `Your data is still in ${r.data.data_folder} - install Depop Seller again any time and it picks up from there.`));
   const steps = el('ol');
-  steps.appendChild(el('li', null, 'Remove the Chrome helper: open chrome://extensions in Chrome, find "Depop Seller helper" and click Remove.'));
+  steps.appendChild(el('li', null, 'Remove the Chrome helper: open chrome://extensions in Chrome, find "Depop Seller" (the one with the hanger logo) and click Remove.'));
   if (mac) steps.appendChild(el('li', null, 'If Depop Seller is in your Dock, right-click its icon and choose Options, then Remove from Dock.'));
   box.appendChild(el('p', null, 'What is left for you to do:'));
   box.appendChild(steps);

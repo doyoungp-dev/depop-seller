@@ -139,6 +139,11 @@ def test_the_helper_reads_the_lists_without_buyers_and_matches_the_app_s_version
     manifest = json.loads((root / "chrome_extension" / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["background"]["service_worker"] == "background.js" and (root / "chrome_extension" / "background.js").is_file()
     assert manifest["permissions"] == ["storage"]                         # no new powers over the browser
+    assert manifest["name"] == "Depop Seller"                             # in Chrome it looks like the app
+    from PIL import Image
+    for size, path in manifest["icons"].items():
+        with Image.open(root / "chrome_extension" / path) as icon:
+            assert icon.size == (int(size), int(size))
     for page in ("shop", "sell"):
         html = (root / "depop_seller" / "static" / f"{page}.html").read_text(encoding="utf-8")
         assert f"const HELPER_VERSION = '{manifest['version']}';" in html, page
@@ -166,7 +171,14 @@ def test_a_refresh_reads_only_the_recent_sales_and_keeps_the_older_ones(tmp_path
     utc = lambda *a: datetime(*a, tzinfo=timezone.utc)
     march = {**SOLD[1], "purchase_id": 10, "status": "completed", "sold_timestamp": "2026-03-01T10:00:00Z"}
     gone = {**SOLD[1], "purchase_id": 9, "sold_timestamp": "2026-10-01T10:00:00Z"}
-    assert shop.Requests().start("sold")["since"] is None                  # nothing kept yet: read every sale
+    # no history - a first refresh, a first one that failed, or a list kept by an older version
+    # that never recorded a full read - means reading every sale
+    assert shop.Requests().start("sold")["since"] is None
+    shop.save("sold", {"items": [], "error": "Depop says you are not signed in"})
+    assert shop.sold_since(now=utc(2026, 11, 5)) is None
+    shop.save("sold", {"items": [shop.sold_item(r) for r in SOLD], "error": None})
+    assert shop.sold_since(now=utc(2026, 11, 5)) is None
+    assert shop.Requests().start("selling")["since"] is None               # the selling list: always whole
 
     shop.import_lists({"what": "sold"}, {"sold": SOLD + [gone, march]}, now=utc(2026, 10, 31))
     since = shop.sold_since(now=utc(2026, 11, 5))

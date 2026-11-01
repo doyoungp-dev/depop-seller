@@ -1,22 +1,43 @@
 {
   "manifest_version": 3,
-  "name": "Depop Seller helper",
-  "version": "1.4",
+  "name": "Depop Seller",
+  "version": "1.5",
   "description": "Adds an item's photos from the local Depop Seller app to Depop's 'List an item' form, and reads what you are selling and have sold for the app's Shop tab. Runs in your own Chrome; never posts.",
-  "permissions": ["storage"],
-  "host_permissions": ["http://127.0.0.1:8765/*", "http://localhost:8765/*"],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:8765/*",
+    "http://localhost:8765/*"
+  ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["http://127.0.0.1:8765/*", "http://localhost:8765/*"],
-      "js": ["sell_page.js"],
+      "matches": [
+        "http://127.0.0.1:8765/*",
+        "http://localhost:8765/*"
+      ],
+      "js": [
+        "sell_page.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.depop.com/*", "https://depop.com/*"],
-      "js": ["depop.js"],
+      "matches": [
+        "https://www.depop.com/*",
+        "https://depop.com/*"
+      ],
+      "js": [
+        "depop.js"
+      ],
       "run_at": "document_idle"
     }
   ]

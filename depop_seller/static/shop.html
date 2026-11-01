@@ -118,7 +118,7 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const HELPER_VERSION = '1.4';   // bump together with chrome_extension/manifest.json (and sell.html)
+const HELPER_VERSION = '1.5';   // bump together with chrome_extension/manifest.json (and sell.html)
 const PAGE = 60;                 // cards shown at a time; "Show more" adds the next ones
 let S = null;
 const shown = { selling: PAGE, sold: PAGE };
@@ -300,7 +300,7 @@ function checkHelper() {
   const old = v && v !== HELPER_VERSION;
   $('helper-missing').hidden = !(missing || old);
   if (old) {
-    $('helper-why').textContent = `Chrome is still running the older helper (v${v}). Open chrome://extensions, press the reload arrow on "Depop Seller helper", then reload this page.`;
+    $('helper-why').textContent = `Chrome is still running the older helper (v${v}). Open chrome://extensions, press the reload arrow on "Depop Seller", then reload this page.`;
   }
   ['selling-refresh', 'sold-refresh'].forEach(id => { $(id).disabled = missing || old; });
 }

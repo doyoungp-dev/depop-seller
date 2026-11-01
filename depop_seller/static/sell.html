@@ -113,7 +113,7 @@
     <ol style="margin:6px 0 0 18px">
       <li>Open a new tab at <code>chrome://extensions</code> and switch on <b>Developer mode</b> (top right).</li>
       <li>Click <b>Load unpacked</b> and choose the folder <code id="ext-dir"></code>.</li>
-      <li>Come back here and click <b>Reload</b>. The buttons turn red when the helper is detected.</li>
+      <li>It shows up as <b>Depop Seller</b> with the hanger logo. Come back here and click <b>Reload</b>. The buttons turn red when the helper is detected.</li>
     </ol>
     Until then the button falls back to opening a separate automated Chrome window, which Depop may block.
   </div>
@@ -465,7 +465,7 @@ function openViaExtension(it, job) {
   window.postMessage({ type: 'depop-seller:open', batch: B, item: it.id, server: location.origin }, '*');
 }
 
-const HELPER_VERSION = '1.4';   // bump together with chrome_extension/manifest.json
+const HELPER_VERSION = '1.5';   // bump together with chrome_extension/manifest.json
 
 function showHelp() {
   const ext = hasExtension();
@@ -475,7 +475,7 @@ function showHelp() {
   const v = document.documentElement.dataset.depopSellerExt;
   const ev = $('ext-version');
   if (!ext) ev.textContent = '';
-  else if (v !== HELPER_VERSION) { ev.textContent = `helper v${v} is out of date - open chrome://extensions, press reload on "Depop Seller helper", then Reload here`; ev.className = 'missing'; }
+  else if (v !== HELPER_VERSION) { ev.textContent = `helper v${v} is out of date - open chrome://extensions, press reload on "Depop Seller", then Reload here`; ev.className = 'missing'; }
   else { ev.textContent = `helper v${v}`; ev.className = 'muted'; }
 }
 
