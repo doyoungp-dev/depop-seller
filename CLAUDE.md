@@ -47,18 +47,7 @@ machines hand that over; an empty list means the Mac side is fully checked.
 - **Before a release (Windows):** if an unchecked line covers a change going into the release, say so
   before publishing. The owner decides; a change that only touches Windows code need not wait.
 
-- [ ] **Batches → Choose folder…**: Finder's folder window opens *in front of* the app (on Windows the
-  first version's window existed but never showed - check it really appears); picking a folder makes
-  "Save in:" show it, and Create batch makes the folder there. (`desktop.folder_picker_command`, the
-  `osascript` `choose folder` branch) - shipped in 1.1.5
-- [ ] **Batches → Delete batch → Continue**: the batch's folder lands in the Trash and the card goes; if
-  macOS asks to let Depop Seller control Finder (the fallback when moving into `~/.Trash` is refused),
-  allowing it works, and the warning's wording ("the Trash") is right. (`desktop.move_to_trash`, darwin
-  branch) - shipped in 1.1.5
-- [ ] **Settings → Delete Depop Seller → Continue** (on a copy in /Applications, not the developer checkout):
-  the app closes, and a few seconds later its folder, `~/Library/Application Support/Depop Seller` and
-  `~/Library/Logs/Depop Seller.log` are in the Trash; the data folder stays unless ticked, then it is in the
-  Trash too. (`uninstall.posix_script`, the waiting `/bin/sh` script) - shipped in 1.1.6
+(Nothing waiting. Choose folder, Delete batch and Delete Depop Seller were checked on the MacBook before 1.1.6.)
 
 ## Data layout
 
