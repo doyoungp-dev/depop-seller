@@ -406,7 +406,10 @@ class ReviewServer:
         self.code_mtime = code_mtime()          # to spot an update while the app is running
         self.last_request = time.monotonic()
         self.closing_armed: float | None = None
-        self.handoff_at = 0.0                   # when the Depop helper was last handed an item
+        # when the Depop helper was last handed an item - never yet, so not 0.0: the monotonic clock
+        # starts near zero when a computer boots, and a fresh app looked busy for 2 minutes after a
+        # restart (caught by CI on a just-booted Mac)
+        self.handoff_at = float("-inf")
         self.update_job: dict = {"running": False, "phase": None, "error": None, "installed": None, "restart": None}
 
     # ---- selling ---------------------------------------------------------------------

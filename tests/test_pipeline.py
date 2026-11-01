@@ -1134,13 +1134,13 @@ def test_closing_the_window_stops_the_app_unless_something_is_running(monkeypatc
         server.group_state.clear()
         server.describe_state.clear()
         server.style_job["running"] = False
-        server.handoff_at = 0.0
+        server.handoff_at = float("-inf")
         setup()
         assert server.busy() == expected, label
         assert close_and_wait() is False, label            # stays up while it works
 
     server.style_job["running"] = False
-    server.handoff_at = 0.0
+    server.handoff_at = float("-inf")
     server.group_state.clear()
     server.describe_state.clear()
     assert close_and_wait() is True                        # and stops once the work is done
@@ -1328,3 +1328,12 @@ def test_sell_page_generates_descriptions_for_the_ticked_items_only():
     assert "SELECTED.has(" in html and "label.pick" in html
     # bulk runs take minutes: the page must redraw changed cards only, never the one being typed in
     assert "node.contains(document.activeElement)" in html
+
+
+def test_a_fresh_app_is_not_busy_even_right_after_the_computer_starts(monkeypatch):
+    """The monotonic clock starts near zero at boot. A hand-off clock that started at 0.0 made a
+    freshly started app look busy ("sending photos to Depop") for two minutes after a restart."""
+    import depop_seller.review as review
+
+    monkeypatch.setattr(review.time, "monotonic", lambda: 5.0)          # five seconds after boot
+    assert review.ReviewServer().busy() is None
