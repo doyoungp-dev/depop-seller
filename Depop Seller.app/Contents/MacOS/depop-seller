@@ -15,6 +15,7 @@ set -u
 
 LOG="$HOME/Library/Logs/Depop Seller.log"
 RECORDED="$HOME/Library/Application Support/Depop Seller/project-path"
+PYTHON_PKG="https://www.python.org/ftp/python/3.14.10/python-3.14.10-macos11.pkg"   # official, signed by the PSF
 
 fail() {
     /usr/bin/osascript -e "display dialog \"$1\" buttons {\"OK\"} default button 1 with icon caution with title \"Depop Seller\"" >/dev/null 2>&1
@@ -83,18 +84,19 @@ main() {
         echo "no .venv yet - running setup"
         # Apple's own /usr/bin/python3 is too old and, without the developer tools, pops up an
         # offer to install them - so only versioned names, which it never answers to. 3.14 first:
-        # the version the tests run on.
+        # the version the tests run on. Not 3.15 yet: onnxruntime, one of the libraries, has no
+        # build for it, so setup would fail half-way (see CLAUDE.md).
         local py="" candidate
-        for candidate in python3.14 python3.13 python3.15 python3.12; do
+        for candidate in python3.14 python3.13 python3.12; do
             if command -v "$candidate" >/dev/null 2>&1 &&
-               "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
+               "$candidate" -c 'import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] <= (3, 14) else 1)'; then
                 py="$candidate"
                 break
             fi
         done
         if [ -z "$py" ]; then
-            /usr/bin/osascript -e 'display dialog "Depop Seller needs Python 3.12 or newer, which this Mac does not have yet.\n\nI will open the download page: click the yellow Download Python button, open the file and click Continue through the installer, then double-click Depop Seller again." buttons {"Open the page", "Cancel"} default button 1 with title "Depop Seller"' >/dev/null 2>&1 \
-                && open "https://www.python.org/downloads/"
+            /usr/bin/osascript -e 'display dialog "Depop Seller needs Python 3.14, which this Mac does not have yet. (A newer Python such as 3.15 does not work with it yet.)\n\nClick Download: the Python 3.14 installer goes to your Downloads. Open it, click Continue through it, then double-click Depop Seller again." buttons {"Download", "Cancel"} default button 1 with title "Depop Seller"' >/dev/null 2>&1 \
+                && open "$PYTHON_PKG"
             exit 1
         fi
         note "Setting up - this takes a minute or two."

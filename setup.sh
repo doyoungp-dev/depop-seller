@@ -8,18 +8,19 @@ say() { printf '\n== %s\n' "$1"; }
 
 # ---------------------------------------------------------------- Python
 PY="${DEPOP_PYTHON:-}"                 # the macOS app has already found one
-for candidate in python3.14 python3.13 python3.15 python3.12 python3; do
+for candidate in python3.14 python3.13 python3.12 python3; do
     [ -n "$PY" ] && break
     if command -v "$candidate" >/dev/null 2>&1; then
-        if "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)'; then
+        # not 3.15 yet: onnxruntime has no build for it, so the install would fail half-way
+        if "$candidate" -c 'import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] <= (3, 14) else 1)'; then
             PY="$candidate"
             break
         fi
     fi
 done
 if [ -z "$PY" ]; then
-    echo "Python 3.12 or newer is required."
-    echo "macOS:  brew install python@3.13     (or download it from python.org)"
+    echo "Python 3.12, 3.13 or 3.14 is required (3.15 is too new for one of the libraries)."
+    echo "macOS:  https://www.python.org/ftp/python/3.14.10/python-3.14.10-macos11.pkg   (or brew install python@3.14)"
     echo "Linux:  use your package manager, e.g. sudo apt install python3.13 python3.13-venv"
     exit 1
 fi

@@ -55,13 +55,16 @@ Windows **Settings → Apps → Depop Seller → Uninstall** - your data folder 
 
 *Would rather not run an installer?* Download `DepopSeller.zip` from the same release instead,
 unzip it somewhere you will keep it, and double-click `Depop Seller.cmd`. That route needs
-[Python](https://www.python.org/downloads/) 3.12 or newer and sets itself up on first run.
+[Python](https://www.python.org/downloads/) 3.12, 3.13 or 3.14 (not 3.15 yet) and sets itself up
+on first run.
 
 ## Install on a Mac
 
-1. **Install Python, once.** Go to [python.org/downloads](https://www.python.org/downloads/), click
-   the yellow **Download Python** button, open the file and click **Continue** through the
-   installer. (If you skip this, the app offers to open that page for you.)
+1. **Install Python 3.14, once.** Download
+   [the Python 3.14 installer](https://www.python.org/ftp/python/3.14.10/python-3.14.10-macos11.pkg)
+   from python.org, open it and click **Continue** through it. Use this link rather than the
+   newest Python on python.org's front page: Python 3.15 does not work with Depop Seller yet.
+   (If you skip this, the app offers to download it for you.)
 2. **Download** `DepopSeller.zip` - the Mac button above. Your Mac unzips it into a folder called
    `depop_seller_app` in Downloads; move that folder somewhere you will keep it, such as Documents.
 3. **Double-click Depop Seller** inside the folder. The first time, macOS says it could not verify
@@ -123,7 +126,7 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 
 ## For developers
 
-Python 3.12+, standard library HTTP server, vanilla JS pages, a small Chrome extension, and the
+Python 3.12 to 3.14, standard library HTTP server, vanilla JS pages, a small Chrome extension, and the
 Anthropic SDK for photo grouping. Descriptions run through the Claude Code CLI on the user's own
 subscription and never touch the API. [`CLAUDE.md`](CLAUDE.md) holds the architecture notes and
 the reasoning behind the less obvious choices.

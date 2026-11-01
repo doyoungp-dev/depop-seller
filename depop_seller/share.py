@@ -62,12 +62,13 @@ EASIEST ON WINDOWS: skip this folder and use the installer instead.
 
 To set up this folder instead, you need, once:
   * Google Chrome
-  * Python 3.12 or newer
-      Windows - easiest: open the Microsoft Store, search "Python 3.13", click Get.
+  * Python 3.12, 3.13 or 3.14 - not 3.15, which does not work with the app yet
+      Windows - easiest: open the Microsoft Store, search "Python 3.14", click Get.
                 or from https://www.python.org/downloads/windows/ - if you use the
                 installer, tick "Add python.exe to PATH" on its FIRST screen.
-      Mac     - https://www.python.org/downloads/ (the app offers to open this for
-                you if it is missing). Default options are fine.
+      Mac     - https://www.python.org/ftp/python/3.14.10/python-3.14.10-macos11.pkg
+                (the app offers to download it for you if it is missing).
+                Default options are fine.
   * an Anthropic API key of your own, and your own Claude Pro or Max account
     (the app asks for both and explains what each one pays for)
 

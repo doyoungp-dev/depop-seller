@@ -9,24 +9,39 @@ function Say($text) { Write-Host "`n== $text" }
 # Windows ships a stub called python.exe that only prints "Python was not found" and offers the
 # Store. It looks like Python to Get-Command, so every candidate is judged by whether it can
 # actually run, with its own noise suppressed - a real Store install lives in the same folder.
+# 3.12 to 3.14 only: onnxruntime, one of the libraries, has no build for 3.15 yet, so the install
+# would fail half-way. The py launcher runs the newest Python by default, so ask it by version.
 $py = $null
-foreach ($candidate in @("py", "python", "python3")) {
-    $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
-    if (-not $cmd) { continue }
-    & $cmd.Source -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 12) else 1)" *> $null
-    if ($LASTEXITCODE -eq 0) { $py = $cmd.Source; break }
+$launcher = Get-Command "py" -ErrorAction SilentlyContinue
+if ($launcher) {
+    foreach ($version in @("3.14", "3.13", "3.12")) {
+        & $launcher.Source "-$version" -c "import sys" *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $py = (& $launcher.Source "-$version" -c "import sys; print(sys.executable)").Trim()
+            break
+        }
+    }
+}
+if (-not $py) {
+    foreach ($candidate in @("python", "python3")) {
+        $cmd = Get-Command $candidate -ErrorAction SilentlyContinue
+        if (-not $cmd) { continue }
+        & $cmd.Source -c "import sys; raise SystemExit(0 if (3, 12) <= sys.version_info[:2] <= (3, 14) else 1)" *> $null
+        if ($LASTEXITCODE -eq 0) { $py = $cmd.Source; break }
+    }
 }
 if (-not $py) {
     Write-Host ""
-    Write-Host "  Depop Seller needs Python, which this computer does not have yet."
+    Write-Host "  Depop Seller needs Python 3.14, which this computer does not have yet."
+    Write-Host "  (A newer Python such as 3.15 does not work with it yet.)"
     Write-Host ""
-    Write-Host "  I am opening the download page. On the installer's FIRST screen, tick"
+    Write-Host "  I am downloading the Python 3.14 installer. Open it; on its FIRST screen, tick"
     Write-Host "     [x] Add python.exe to PATH"
     Write-Host "  then click Install Now. When it finishes, double-click Depop Seller again."
     Write-Host ""
-    Write-Host "  (If Windows offers you Python from the Microsoft Store instead, that works too.)"
+    Write-Host "  (If Windows offers you Python 3.14 from the Microsoft Store instead, that works too.)"
     Write-Host ""
-    try { Start-Process "https://www.python.org/downloads/windows/" } catch { }
+    try { Start-Process "https://www.python.org/ftp/python/3.14.10/python-3.14.10-amd64.exe" } catch { }
     exit 1
 }
 Say "using $(& $py --version) at $py"
