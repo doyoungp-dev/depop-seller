@@ -8,3 +8,5 @@
 *.heic binary
 *.HEIC binary
 *.db   binary
+# The Mac app's compiled starter (built from installer/mac_launcher.c)
+"Depop Seller.app/Contents/MacOS/depop-seller" binary

@@ -647,6 +647,27 @@ def test_claude_cli_is_found_on_macos_without_PATH(tmp_path: Path, monkeypatch):
     assert describe.find_claude_cli() == app_cli
 
 
+def test_the_mac_app_starts_with_a_universal_program_not_a_script():
+    """An app whose main program is a script makes an Apple silicon Mac without Rosetta ask to
+    install Rosetta instead of running it. The bundle's executable is a small universal binary
+    (installer/mac_launcher.c) that hands over to the script next to it."""
+    import plistlib
+    import struct
+
+    from depop_seller import config
+
+    contents = config.PROJECT_ROOT / "Depop Seller.app" / "Contents"
+    plist = plistlib.loads((contents / "Info.plist").read_bytes())
+    program = (contents / "MacOS" / plist["CFBundleExecutable"]).read_bytes()
+    magic, count = struct.unpack(">II", program[:8])
+    assert magic == 0xCAFEBABE, "not a universal Mach-O binary"                  # FAT_MAGIC
+    cpus = {struct.unpack(">I", program[8 + 20 * i:12 + 20 * i])[0] for i in range(count)}
+    assert cpus == {0x0100000C, 0x01000007}, cpus                                  # arm64, x86_64
+    script = (contents / "MacOS" / "depop-seller.sh").read_text(encoding="utf-8")
+    assert script.startswith("#!/bin/bash") and 'main "$@"' in script
+    assert b"depop-seller.sh" in program
+
+
 def test_open_folder_uses_the_platform_command(tmp_path: Path, monkeypatch):
     from depop_seller import desktop
 

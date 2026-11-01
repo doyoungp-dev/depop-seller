@@ -35,7 +35,7 @@ say "installing depop_seller and its dependencies"
 # ---------------------------------------------------------------- macOS app bundle
 if [ "$(uname)" = "Darwin" ]; then
     APP="Depop Seller.app"
-    chmod +x "$APP/Contents/MacOS/depop-seller"
+    chmod +x "$APP/Contents/MacOS/depop-seller" "$APP/Contents/MacOS/depop-seller.sh"
     xattr -dr com.apple.quarantine "$APP" 2>/dev/null || true   # in case it arrived as a ZIP
     # remember where the project is, so a copy of the app on the Desktop or in /Applications works
     SUPPORT="$HOME/Library/Application Support/Depop Seller"
