@@ -42,5 +42,8 @@ jobs:
       - name: Lint (the rules are in pyproject.toml)
         run: python -m ruff check --output-format github .
 
+      - name: Type check (as this machine's system)
+        run: python -m mypy
+
       - name: Run the tests
         run: python -m pytest -q -p no:cacheprovider

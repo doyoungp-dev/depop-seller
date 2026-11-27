@@ -86,6 +86,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from . import __version__, config, db, desktop
@@ -546,7 +547,8 @@ class ReviewServer:
         with self.lock:
             if self.white_state.get(s.paths.batch, {}).get("running"):
                 raise RuntimeError("photos are already being put on white")
-            st = {"running": True, "phase": "starting", "done": 0, "total": len(todo), "error": None, "failed": []}
+            st: dict[str, Any] = {"running": True, "phase": "starting", "done": 0, "total": len(todo), "error": None,
+                                  "failed": []}
             self.white_state[s.paths.batch] = st
 
         def work() -> None:
@@ -1150,8 +1152,8 @@ class ReviewHandler(BaseHTTPRequestHandler):
 
     def _route(self) -> tuple[str, str | None]:
         parts = urlsplit(self.path)
-        batch = (parse_qs(parts.query).get("batch") or [None])[0]
-        return parts.path, batch
+        values = parse_qs(parts.query).get("batch")
+        return parts.path, (values[0] if values else None)
 
     def do_GET(self) -> None:  # noqa: N802 (http.server naming)
         path, batch = self._route()

@@ -118,7 +118,7 @@ def _load_session():
 def predict_mask(im: Image.Image) -> np.ndarray:
     """Foreground probability, 0..1, at the network's own resolution (NET_SIZE square)."""
     sess = _load_session()
-    small = np.asarray(im.convert("RGB").resize((NET_SIZE, NET_SIZE), Image.LANCZOS), dtype=np.float32) / 255.0
+    small = np.asarray(im.convert("RGB").resize((NET_SIZE, NET_SIZE), Image.Resampling.LANCZOS), dtype=np.float32) / 255.0
     mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
     std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
     x = ((small - mean) / std).transpose(2, 0, 1)[None].astype(np.float32)
@@ -150,7 +150,7 @@ def _guided(guide: np.ndarray, src: np.ndarray, r: int, eps: float) -> np.ndarra
 def refine_alpha(im: Image.Image, mask: np.ndarray) -> np.ndarray:
     """Turn the network's 1024 px mask into a full-size alpha with crisp, photo-following edges."""
     w, h = im.size
-    m = np.asarray(Image.fromarray((np.clip(mask, 0, 1) * 255).astype(np.uint8)).resize((w, h), Image.BICUBIC),
+    m = np.asarray(Image.fromarray((np.clip(mask, 0, 1) * 255).astype(np.uint8)).resize((w, h), Image.Resampling.BICUBIC),
                    dtype=np.float32) / 255.0
     guide = np.asarray(im.convert("L"), dtype=np.float32) / 255.0
     r = max(4, round(max(w, h) / 180))
@@ -213,7 +213,7 @@ def drop_strays(alpha: np.ndarray, work_px: int = 192) -> np.ndarray:
     grown[:-1] |= wanted[1:]
     grown[:, 1:] |= wanted[:, :-1]
     grown[:, :-1] |= wanted[:, 1:]
-    full = np.asarray(Image.fromarray(grown.astype(np.uint8) * 255).resize((w, h), Image.NEAREST)) > 0
+    full = np.asarray(Image.fromarray(grown.astype(np.uint8) * 255).resize((w, h), Image.Resampling.NEAREST)) > 0
     return alpha * full
 
 
@@ -230,7 +230,7 @@ def compose(im: Image.Image, alpha: np.ndarray, canvas_px: int = CANVAS_PX, marg
     out = out.crop(box)
     inner = round(canvas_px * (1 - 2 * margin))
     scale = inner / max(out.size)
-    out = out.resize((max(1, round(out.width * scale)), max(1, round(out.height * scale))), Image.LANCZOS)
+    out = out.resize((max(1, round(out.width * scale)), max(1, round(out.height * scale))), Image.Resampling.LANCZOS)
     canvas = Image.new("RGB", (canvas_px, canvas_px), (255, 255, 255))
     canvas.paste(out, ((canvas_px - out.width) // 2, (canvas_px - out.height) // 2))
     return canvas
@@ -245,12 +245,11 @@ def white_background(im: Image.Image, mask_fn: Callable[[Image.Image], np.ndarra
 def make_white(src: Path, dst: Path, thumb_dst: Path, thumb_px: int = config.THUMB_SIZE,
                mask_fn: Callable[[Image.Image], np.ndarray] | None = None) -> None:
     """Cut out `src` (a photo of any size), write the 2048 px result to `dst` and its thumbnail."""
-    with Image.open(src) as im:
-        im = im.convert("RGB")
-        result = white_background(im, mask_fn)
+    with Image.open(src) as opened:
+        result = white_background(opened.convert("RGB"), mask_fn)
     dst.parent.mkdir(parents=True, exist_ok=True)
     thumb_dst.parent.mkdir(parents=True, exist_ok=True)
-    for path, image, quality in ((dst, result, JPEG_QUALITY), (thumb_dst, result.resize((thumb_px, thumb_px), Image.LANCZOS), 80)):
+    for path, image, quality in ((dst, result, JPEG_QUALITY), (thumb_dst, result.resize((thumb_px, thumb_px), Image.Resampling.LANCZOS), 80)):
         tmp = path.with_name(path.name + ".part")
         image.save(tmp, "JPEG", quality=quality, optimize=True)
         tmp.replace(path)

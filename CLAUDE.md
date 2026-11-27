@@ -128,5 +128,5 @@ overwrites, a rename when both are on one drive), and `load_api_key` still reads
 
 - Python: type hints, `pathlib`, `argparse` CLI, stdlib `logging`; small modules (`scan`, `group`, `manifest`, `review`, `apply`).
 - Idempotent and safe: re-running never destroys data; `--apply` refuses to write into a non-empty `sort_image/` unless `--force`.
-- Tests in `tests/` (pytest) use tiny synthetic images, never the real photos.
+- Tests in `tests/` (pytest) use tiny synthetic images, never the real photos. `ruff check .` and `mypy` must pass as well (rules in `pyproject.toml`); CI runs all three on Windows and macOS. Code for the other system gets `# type: ignore[attr-defined]`, never a changed platform check (tests fake the other system by patching `os.name` / `sys.platform`).
 - Follow the Anthropic SDK patterns from the `claude-api` skill when touching `group.py` (no `budget_tokens`, no prefill; use `output_config` for structured output).

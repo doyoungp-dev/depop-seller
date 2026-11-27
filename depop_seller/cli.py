@@ -263,7 +263,7 @@ def alert(message: str, title: str = "Depop Seller") -> None:
         if os.name == "nt":
             import ctypes
 
-            ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)     # MB_ICONERROR
+            ctypes.windll.user32.MessageBoxW(0, message, title, 0x10)  # type: ignore[attr-defined]  # MB_ICONERROR
         elif sys.platform == "darwin":
             import subprocess
 

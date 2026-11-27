@@ -62,9 +62,8 @@ def read_metadata(path: Path) -> tuple[datetime | None, int, int]:
 
 
 def make_thumbnail(src: Path, dst: Path, size: int = THUMB_SIZE) -> None:
-    with Image.open(src) as im:
-        im = ImageOps.exif_transpose(im)
-        im = im.convert("RGB")
+    with Image.open(src) as opened:
+        im = ImageOps.exif_transpose(opened).convert("RGB")
         im.thumbnail((size, size))
         dst.parent.mkdir(parents=True, exist_ok=True)
         im.save(dst, "JPEG", quality=85, optimize=True)

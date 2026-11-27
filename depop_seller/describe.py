@@ -217,7 +217,7 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, **no_console())
     else:
         try:
-            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)  # type: ignore[attr-defined]  # not on Windows
         except (ProcessLookupError, PermissionError):
             proc.kill()
 
@@ -237,19 +237,20 @@ def run_claude_code(prompt: str, *, cli: Path, cwd: Path = PROJECT_ROOT, timeout
                             cwd=str(cwd), text=True, encoding="utf-8", errors="replace",
                             env=subscription_env(), **extra)
     assert proc.stdin is not None and proc.stdout is not None and proc.stderr is not None
+    stdin, stderr = proc.stdin, proc.stderr
     watchdog = threading.Timer(timeout, _kill_tree, args=(proc,))
     watchdog.start()
     err_lines: list[str] = []
 
     def feed() -> None:                    # the prompt is bigger than a pipe buffer: never block the reader
         try:
-            proc.stdin.write(prompt)
-            proc.stdin.close()
+            stdin.write(prompt)
+            stdin.close()
         except OSError:
             pass
 
     threading.Thread(target=feed, name="claude-stdin", daemon=True).start()
-    threading.Thread(target=lambda: err_lines.extend(proc.stderr), name="claude-stderr", daemon=True).start()
+    threading.Thread(target=lambda: err_lines.extend(stderr), name="claude-stderr", daemon=True).start()
     credential = "unknown"
     result: dict | None = None
     try:

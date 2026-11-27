@@ -229,7 +229,7 @@ def _spellings(folder: Path) -> set[str]:
     if os.name == "nt":
         import ctypes
         buffer = ctypes.create_unicode_buffer(1024)
-        if ctypes.windll.kernel32.GetShortPathNameW(str(folder), buffer, len(buffer)):
+        if ctypes.windll.kernel32.GetShortPathNameW(str(folder), buffer, len(buffer)):  # type: ignore[attr-defined]
             names |= {buffer.value, Path(buffer.value).as_posix()}
     return names
 

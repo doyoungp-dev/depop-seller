@@ -202,6 +202,12 @@ def test_a_refresh_reads_only_the_recent_sales_and_keeps_the_older_ones(tmp_path
     assert [s["id"] for s in snap["items"]] == [11, 12] and snap["full_at"] == "2026-11-06T00:00:00Z"
     assert snap["checked_from"] is None
 
+    # a date that cannot be read is treated as a full read, not a crash (found by the type checker)
+    shop.import_lists({"what": "sold", "since": "not a date"}, {"sold": SOLD, "sold_since": "not a date"},
+                      now=utc(2026, 11, 7))
+    snap = shop.load()["sold"]
+    assert [s["id"] for s in snap["items"]] == [11, 12] and snap["full_at"] == "2026-11-07T00:00:00Z"
+
 
 def test_each_list_exports_as_a_spreadsheet_file(server):
     def get(path):

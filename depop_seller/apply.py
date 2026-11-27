@@ -20,10 +20,10 @@ log = logging.getLogger(__name__)
 
 def convert(src: Path, dst: Path, max_px: int = OUTPUT_MAX_PX, quality: int = OUTPUT_JPEG_QUALITY) -> None:
     """HEIC/JPEG/PNG -> upright RGB JPEG, long edge <= max_px, EXIF stripped."""
-    with Image.open(src) as im:
-        im = ImageOps.exif_transpose(im).convert("RGB")
+    with Image.open(src) as opened:
+        im = ImageOps.exif_transpose(opened).convert("RGB")
         if max(im.size) > max_px:
-            im.thumbnail((max_px, max_px), Image.LANCZOS)
+            im.thumbnail((max_px, max_px), Image.Resampling.LANCZOS)
         im.save(dst, "JPEG", quality=quality, optimize=True)
 
 

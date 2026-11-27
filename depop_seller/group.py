@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 from PIL import Image
 from pydantic import BaseModel
@@ -72,8 +72,8 @@ def _mean_colour(thumb: Path) -> tuple[float, float, float]:
     with Image.open(thumb) as im:
         w, h = im.size
         box = (int(w * 0.30), int(h * 0.15), int(w * 0.70), int(h * 0.80))
-        px = im.convert("RGB").crop(box).resize((1, 1), Image.BOX).getpixel((0, 0))
-    return tuple(float(c) for c in px)
+        px = cast(tuple[int, int, int], im.convert("RGB").crop(box).resize((1, 1), Image.Resampling.BOX).getpixel((0, 0)))
+    return float(px[0]), float(px[1]), float(px[2])
 
 
 def group_local(
@@ -255,9 +255,9 @@ def group_claude(
                 model=model,
                 max_tokens=16000,
                 system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": _window_content(paths, context, new)}],
+                messages=[{"role": "user", "content": cast(Any, _window_content(paths, context, new))}],
                 output_format=WindowResult,
-                output_config={"effort": effort},
+                output_config=cast(Any, {"effort": effort}),
             )
             usage.calls += 1
             usage.input_tokens += response.usage.input_tokens + (response.usage.cache_read_input_tokens or 0) \
@@ -334,8 +334,8 @@ def _small_image_block(thumb: Path, px: int) -> dict:
     """A JPEG downsized from the cached thumbnail, deterministic so the cached prefix stays identical."""
     import io
 
-    with Image.open(thumb) as im:
-        im = im.convert("RGB")
+    with Image.open(thumb) as opened:
+        im = opened.convert("RGB")
         im.thumbnail((px, px))
         buf = io.BytesIO()
         im.save(buf, "JPEG", quality=80, optimize=True)
@@ -410,9 +410,9 @@ def find_duplicates(
                     model=model,
                     max_tokens=16000,
                     system=MATCH_SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": content}],
+                    messages=[{"role": "user", "content": cast(Any, content)}],
                     output_format=MatchResult,
-                    output_config={"effort": effort},
+                    output_config=cast(Any, {"effort": effort}),
                 )
                 usage.calls += 1
                 u = response.usage

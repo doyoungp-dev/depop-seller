@@ -161,6 +161,7 @@ class SignIn:
         timer.daemon = True
         timer.start()
         said = []
+        assert proc.stdout is not None                      # started with stdout=PIPE
         try:
             for line in iter(proc.stdout.readline, ""):
                 line = line.strip()

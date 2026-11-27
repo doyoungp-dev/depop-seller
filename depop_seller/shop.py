@@ -35,6 +35,7 @@ import secrets
 import time
 from collections import Counter, defaultdict
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from . import db
 
@@ -142,7 +143,7 @@ def _main_currency(rows: list[dict]) -> str:
 
 
 def selling_totals(items: list[dict]) -> dict:
-    by = defaultdict(lambda: {"count": 0, "value": 0.0})
+    by: defaultdict[Any, dict[str, Any]] = defaultdict(lambda: {"count": 0, "value": 0.0})
     for it in items:
         by[it["currency"]]["count"] += 1
         by[it["currency"]]["value"] = round(by[it["currency"]]["value"] + it["price"], 2)
@@ -284,7 +285,8 @@ def import_lists(job: dict, body: dict, now: datetime | None = None) -> dict:
     what = job["what"]
     kinds = KINDS if what == "both" else (what,)
     error = str(body.get("error") or "").strip()[:300]
-    counts = body.get("counts") if isinstance(body.get("counts"), dict) else {}
+    raw_counts = body.get("counts")
+    counts: dict[str, Any] = raw_counts if isinstance(raw_counts, dict) else {}
     stored = {}
     old = load()
     for kind in kinds:
@@ -306,8 +308,9 @@ def import_lists(job: dict, body: dict, now: datetime | None = None) -> dict:
             rows = [sold_item(r) for r in raw if isinstance(r, dict)]
             since = job.get("since")
             prev = old.get("sold") or {}
-            if since and body.get("sold_since") == since:
-                cut, seen = _when(since), {r["id"] for r in rows}
+            cut = _when(since) if since else None
+            if cut is not None and body.get("sold_since") == since:
+                seen = {r["id"] for r in rows}
                 for r in prev.get("items") or []:
                     when = _when(r.get("sold_at"))
                     if r.get("id") not in seen and (when is None or when < cut):
@@ -324,7 +327,7 @@ def import_lists(job: dict, body: dict, now: datetime | None = None) -> dict:
 
 def state(now: datetime | None = None) -> dict:
     """Both lists with their totals, worked out now - "this month" must not go stale."""
-    out = {}
+    out: dict[str, Any] = {}
     for kind, snap in load().items():
         if snap is None:
             out[kind] = None

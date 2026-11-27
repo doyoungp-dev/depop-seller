@@ -16,6 +16,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .config import PROJECT_ROOT
 
@@ -48,7 +49,7 @@ class Lister:
         self._queue: queue.Queue[Job] = queue.Queue()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
-        self._pw = None
+        self._pw: Any = None
         self._context = None
 
     # ---- public ------------------------------------------------------------------------

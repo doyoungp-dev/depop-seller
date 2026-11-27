@@ -17,6 +17,7 @@ import subprocess
 import sys
 import webbrowser
 from pathlib import Path
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def app_window(url: str, *, size: tuple[int, int] = WINDOW_SIZE) -> str:
         webbrowser.open(url)
         return "default browser"
     cmd = [str(exe), f"--app={url}", f"--window-size={size[0]},{size[1]}"]
-    kwargs = {"start_new_session": True} if os.name != "nt" else {}
+    kwargs: dict[str, Any] = {"start_new_session": True} if os.name != "nt" else {}
     try:
         subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs)
     except OSError as e:                      # a browser that moved or is not runnable
@@ -262,7 +263,7 @@ def _windows_recycle(path: Path) -> None:
     FO_DELETE, FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 3, 0x4, 0x10, 0x40, 0x400
     op = SHFILEOPSTRUCTW(wFunc=FO_DELETE, pFrom=str(path) + chr(0) + chr(0),   # a double-NUL-ended list
                          fFlags=FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI)
-    result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+    result = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))  # type: ignore[attr-defined]  # Windows only
     if result != 0 or op.fAnyOperationsAborted:
         raise OSError(f"Windows could not move it to the Recycle Bin (code {result})")
 
@@ -310,8 +311,8 @@ def windows_desktop_dir() -> Path | None:
         import winreg
 
         key = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:
-            raw, _ = winreg.QueryValueEx(handle, "Desktop")
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as handle:  # type: ignore[attr-defined]  # Windows only
+            raw, _ = winreg.QueryValueEx(handle, "Desktop")  # type: ignore[attr-defined]
         folder = Path(os.path.expandvars(raw))
         if folder.is_dir():
             return folder
