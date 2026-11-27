@@ -102,7 +102,7 @@ def cmd_claude_login(_: argparse.Namespace) -> int:
 
 
 def cmd_review(args: argparse.Namespace) -> int:
-    from .review import serve
+    from .web import serve
 
     batch = batch_paths(args.batch).batch if args.batch else None  # validate the name if one was given
     page = {"sell": "sell", "hub": "hub"}.get(args.command, "")

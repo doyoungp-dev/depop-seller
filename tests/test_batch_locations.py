@@ -15,7 +15,8 @@ from pathlib import Path
 import pytest
 
 from depop_seller import config, desktop
-from depop_seller.review import ReviewHandler, ReviewServer, _Server
+from depop_seller.review import ReviewServer
+from depop_seller.web import ReviewHandler, _Server
 
 
 @pytest.fixture

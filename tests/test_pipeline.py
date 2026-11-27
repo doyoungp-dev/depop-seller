@@ -764,7 +764,8 @@ def test_only_depop_gets_cors_and_other_sites_cannot_post(batch):
     import urllib.request
     from functools import partial
 
-    from depop_seller.review import ReviewHandler, ReviewServer, _Server
+    from depop_seller.review import ReviewServer
+    from depop_seller.web import ReviewHandler, _Server
 
     photos = scan_batch(batch)
     write_manifest(batch.manifest, decisions_to_rows(photos, group_local(batch, photos)))
@@ -812,7 +813,8 @@ def test_a_second_copy_is_refused_but_reopening_after_closing_is_not():
     import urllib.request
     from functools import partial
 
-    from depop_seller.review import ReviewHandler, ReviewServer, _Server
+    from depop_seller.review import ReviewServer
+    from depop_seller.web import ReviewHandler, _Server
 
     srv = _Server(("127.0.0.1", 0), partial(ReviewHandler, ReviewServer()))
     port = srv.server_address[1]
@@ -1301,7 +1303,8 @@ def test_every_page_uses_the_shared_design(batch):
     from functools import partial
     from importlib.resources import files as pkg_files
 
-    from depop_seller.review import ReviewHandler, ReviewServer, _Server
+    from depop_seller.review import ReviewServer
+    from depop_seller.web import ReviewHandler, _Server
 
     for page in ("hub", "review", "sell", "shop", "style", "settings"):
         html = (pkg_files("depop_seller") / "static" / f"{page}.html").read_text(encoding="utf-8")

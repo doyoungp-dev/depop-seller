@@ -152,7 +152,8 @@ def smoke_test(stage: Path, version: str, say=print) -> None:
     file, nothing from this machine's Python - and ask it for /version."""
     python = stage / "runtime" / "python.exe"
     probe = ("import depop_seller, PIL, pillow_heif, anthropic, dotenv, onnxruntime, sqlite3, ssl, "
-             "depop_seller.review, depop_seller.settings, depop_seller.describe, depop_seller.group, "
+             "depop_seller.review, depop_seller.web, depop_seller.session, depop_seller.settings, "
+             "depop_seller.describe, depop_seller.group, "
              "depop_seller.updates, depop_seller.whitebg; import json; print(json.dumps({'version': depop_seller.__version__, "
              "'app': depop_seller.__file__, 'pil': PIL.__file__}))")
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:

@@ -14,7 +14,8 @@ from pathlib import Path
 import pytest
 
 from depop_seller import config, shop
-from depop_seller.review import ReviewHandler, ReviewServer, _Server
+from depop_seller.review import ReviewServer
+from depop_seller.web import ReviewHandler, _Server
 
 # Shaped like Depop's own answers (field names as seen on the selling hub, 2026-11-01).
 SELLING = [

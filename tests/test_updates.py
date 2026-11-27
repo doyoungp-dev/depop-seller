@@ -274,7 +274,8 @@ def test_the_new_copy_starts_windowless_and_waits_for_the_old_one(tmp_path: Path
 
 
 def test_the_new_copy_takes_the_port_once_the_old_one_lets_go():
-    from depop_seller.review import ReviewServer, _bind
+    from depop_seller.review import ReviewServer
+    from depop_seller.web import _bind
 
     old = socket.socket()
     old.bind(("127.0.0.1", 0))
@@ -378,7 +379,8 @@ def test_a_restarted_copy_nobody_comes_back_to_does_not_linger():
 def test_version_and_update_routes(monkeypatch):
     from functools import partial
 
-    from depop_seller.review import ReviewHandler, ReviewServer, _Server
+    from depop_seller.review import ReviewServer
+    from depop_seller.web import ReviewHandler, _Server
 
     monkeypatch.setattr(updates, "check", lambda: {"ok": True, "current": "1.0.0", "newer": False})
     srv = _Server(("127.0.0.1", 0), partial(ReviewHandler, ReviewServer()))
