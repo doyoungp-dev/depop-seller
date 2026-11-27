@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+from datetime import datetime
 from pathlib import Path
 
 from . import config, installer, share, updates
@@ -118,6 +119,25 @@ def default_notes(root: Path, git: str, previous: str | None) -> str:
     subjects = _run(git, "log", "--no-merges", "--format=%s", f"{previous}..HEAD", root=root)
     lines = [f"- {s}" for s in subjects.splitlines() if s and not s.startswith("Release ")]
     return chr(10).join(lines) or "Small fixes."
+
+
+CHANGELOG = "CHANGELOG.md"
+
+
+def add_to_changelog(root: Path, version: str, notes: str, day: str) -> bool:
+    """Put this release's notes at the top of CHANGELOG.md, under its heading. Does nothing when the
+    version is already there, so running release again after a failure adds it once."""
+    path = root / CHANGELOG
+    if not path.is_file():
+        return False
+    text = path.read_text(encoding="utf-8")
+    if re.search(rf"(?m)^## {re.escape(version)} ", text):
+        return False
+    section = f"## {version} - {day}" + chr(10) * 2 + notes.strip() + chr(10) * 2
+    first = re.search(r"(?m)^## ", text)
+    text = text[:first.start()] + section + text[first.start():] if first else text.rstrip() + chr(10) * 2 + section
+    path.write_text(text, encoding="utf-8", newline=chr(10))
+    return True
 
 
 # ---- the zip ----------------------------------------------------------------------------------
@@ -251,6 +271,8 @@ def release(version: str | None = None, *, notes: str | None = None, dry_run: bo
 
     say("Setting the version")
     changed = set_version(root, version)
+    if add_to_changelog(root, version, notes, datetime.now().strftime("%Y-%m-%d")):
+        changed.append(CHANGELOG)
     if changed:
         _run(git, "add", "--", *changed, root=root)
         _run(git, "commit", "--quiet", "-m", f"Release {version}", root=root)

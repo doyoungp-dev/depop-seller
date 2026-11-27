@@ -421,6 +421,21 @@ def test_release_sets_the_version_everywhere_it_lives(tmp_path: Path):
     assert release.set_version(tmp_path, "7.8.9") == []                  # running it again changes nothing
 
 
+def test_release_adds_its_notes_to_the_changelog_once(tmp_path: Path):
+    from depop_seller import config
+
+    shutil.copy(config.PROJECT_ROOT / release.CHANGELOG, tmp_path / release.CHANGELOG)
+    notes = "- Something new for sellers" + chr(10) + "- A fix"
+    assert release.add_to_changelog(tmp_path, "7.8.9", notes, "2027-01-02")
+    text = (tmp_path / release.CHANGELOG).read_text(encoding="utf-8")
+    top = text.index("## 7.8.9 - 2027-01-02")
+    assert top < text.index("## 1.1.6 ")                                 # newest first, older ones kept
+    assert "- Something new for sellers" in text[top:text.index("## 1.1.6 ")]
+    assert not release.add_to_changelog(tmp_path, "7.8.9", notes, "2027-01-03")   # a re-run adds nothing
+    assert (tmp_path / release.CHANGELOG).read_text(encoding="utf-8") == text
+    assert not release.add_to_changelog(tmp_path / "elsewhere", "7.8.9", notes, "2027-01-02")
+
+
 def test_release_zip_holds_only_committed_files_and_passes_the_updater(tmp_path: Path, monkeypatch):
     project = _tree(tmp_path / "checkout", {
         "depop_seller/__init__.py": OLD_INIT, "depop_seller/review.py": "code", "README.md": "docs",
