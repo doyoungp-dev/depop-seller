@@ -33,8 +33,10 @@ Depop Seller.app/Contents/Resources/
 # Previous versions of description_style.md, written by the Style tab
 style_history/
 
-# Claude Code: the shared rules (permissions, attribution, the guard hook) are committed;
+# Claude Code: the shared rules (permissions, attribution, the guard hook), skills and agents are committed;
 # everything else in .claude stays on each computer. None of it ships in the app.
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/skills/
+!.claude/agents/
