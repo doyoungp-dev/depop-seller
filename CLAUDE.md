@@ -3,8 +3,8 @@
 Depop Seller turns a shoot's clothing photos into Depop listings, on the seller's own computer:
 Claude groups the photos into items, the seller fixes the grouping by drag and drop, Claude Code
 writes each description in the seller's style, and a Chrome helper fills in Depop's listing form
-for the seller to check and post. Windows and macOS. The people using it are not engineers (the
-owner, family and friends), and the code is public.
+for the seller to check and post. Windows and macOS. The people using it are not engineers, and the code
+is public.
 
 This file is the short core: the rules that apply to every task. The detail lives here:
 
