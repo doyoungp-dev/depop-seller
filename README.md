@@ -129,12 +129,17 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 
 ## How it's built
 
+[![tests](https://github.com/doyoungp-dev/depop-seller/actions/workflows/tests.yml/badge.svg)](https://github.com/doyoungp-dev/depop-seller/actions/workflows/tests.yml)
+
 Depop Seller was developed through an agentic workflow with Claude Code. I own the architecture, the
 product decisions, and the rules the agent works within, documented in [`CLAUDE.md`](CLAUDE.md): the
 invariants that must never break, the failures that taught them, and the safety constraints every
 change has to respect. Every change is reviewed by me and tested automatically on Windows and macOS,
 and releases go through a guarded, one-command process. The AI's own output is measured rather than
 assumed: `learn` scores Claude's photo grouping against human-reviewed results.
+
+What went wrong along the way, and the rule or test each failure left behind, is in
+[`docs/LESSONS.md`](docs/LESSONS.md).
 
 ## For developers
 
