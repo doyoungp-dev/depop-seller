@@ -32,13 +32,17 @@ This file is the short core: the rules that apply to every task. The detail live
   or turn on auto-merge yourself unless the owner says so for that pull request. Small direct pushes
   to `main` only when the owner asks for them.
 - **An independent review before the owner merges.** After opening a pull request, have it reviewed
-  by a Claude that did not write it: run `/code-review <PR number>` from a new Claude Code session,
-  or hand the diff (`gh pr diff <PR number>`) to a subagent to review, so the review starts without
-  this conversation's assumptions. `/code-review` run in the same session can review inline, which
-  is not independent. (Claude Code's best practices; it runs on the owner's subscription, with no
-  GitHub app or secret.) Report problems that affect correctness and breaks of this file's rules -
-  privacy above all - not style. Fix every confirmed finding on the branch, then give the owner a
-  short summary of what was found and fixed before they merge.
+  by a Claude that did not write it, so the review starts without this conversation's assumptions:
+  run `/code-review <PR number>` from a new Claude Code session, or start a fresh subagent (never a
+  fork, which inherits this conversation) whose prompt holds only the PR number and the task - not
+  the author's own explanation of the change. `/code-review` run in the same session can review
+  inline, which is not independent. Run it plain: not `ultra` (a cloud service) and without
+  `--comment` or `--post` (they post on GitHub from the owner's account); findings come back in the
+  session and nothing is posted. (Claude Code's best practices; it runs on the owner's subscription,
+  with no GitHub app or secret.) Report problems that affect correctness and breaks of this file's
+  rules - privacy above all - not style. Fix every confirmed finding on the branch, and review again
+  if the fixes are more than trivial; then give the owner a short summary of what was found and fixed
+  before they merge.
 - **`main` is protected on GitHub:** no force pushes, no deletion, and a pull request cannot be merged
   until the Windows and macOS checks pass. The owner is an admin and can still push to `main`
   directly, which `release` does for its `Release X.Y.Z` commit and tag.
