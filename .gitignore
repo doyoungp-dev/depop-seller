@@ -33,5 +33,8 @@ Depop Seller.app/Contents/Resources/
 # Previous versions of description_style.md, written by the Style tab
 style_history/
 
-# Claude Code's local settings for whoever works on this - never shipped
-.claude/
+# Claude Code: the shared rules (permissions, attribution, the guard hook) are committed;
+# everything else in .claude stays on each computer. None of it ships in the app.
+.claude/*
+!.claude/settings.json
+!.claude/hooks/

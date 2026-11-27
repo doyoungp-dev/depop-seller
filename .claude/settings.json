@@ -1,0 +1,34 @@
+{
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Read(~/DepopSeller/.env)",
+      "Read(~/DepopSeller/.env.*)",
+      "Edit(~/DepopSeller/.env)",
+      "Edit(~/DepopSeller/.env.*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=\"$CLAUDE_PROJECT_DIR/.venv/bin/python\"; [ -x \"$P\" ] || P=\"$CLAUDE_PROJECT_DIR/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=python3; \"$P\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py\"",
+            "timeout": 30,
+            "statusMessage": "Checking the command against the repo's rules"
+          }
+        ]
+      }
+    ]
+  }
+}
