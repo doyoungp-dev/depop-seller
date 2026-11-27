@@ -19,8 +19,6 @@ import re
 import subprocess
 import sys
 import threading
-import time
-from pathlib import Path
 
 from . import config
 from .describe import _kill_tree, find_claude_cli, subscription_env

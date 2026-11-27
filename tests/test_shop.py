@@ -7,7 +7,7 @@ import re
 import threading
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import UTC, datetime
 from functools import partial
 from pathlib import Path
 
@@ -166,9 +166,11 @@ def test_the_helper_reads_the_lists_without_buyers_and_matches_the_app_s_version
 
 
 def test_a_refresh_reads_only_the_recent_sales_and_keeps_the_older_ones(tmp_path: Path, monkeypatch):
-    from datetime import timezone
     monkeypatch.setattr(config, "DB_PATH", tmp_path / "shop.db")
-    utc = lambda *a: datetime(*a, tzinfo=timezone.utc)
+
+    def utc(*parts):
+        return datetime(*parts, tzinfo=UTC)
+
     march = {**SOLD[1], "purchase_id": 10, "status": "completed", "sold_timestamp": "2026-03-01T10:00:00Z"}
     gone = {**SOLD[1], "purchase_id": 9, "sold_timestamp": "2026-10-01T10:00:00Z"}
     # no history - a first refresh, a first one that failed, or a list kept by an older version

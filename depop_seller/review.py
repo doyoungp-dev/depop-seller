@@ -82,10 +82,10 @@ import threading
 import time
 from datetime import datetime
 from functools import partial
-from pathlib import Path
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from . import __version__, config, db, desktop

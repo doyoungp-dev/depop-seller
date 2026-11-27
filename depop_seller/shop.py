@@ -34,7 +34,7 @@ import json
 import secrets
 import time
 from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from . import db
 
@@ -192,7 +192,7 @@ def _when(stamp) -> datetime | None:
 
 
 def _utc(when: datetime) -> str:
-    return when.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return when.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def sold_since(now: datetime | None = None) -> str | None:
@@ -200,7 +200,7 @@ def sold_since(now: datetime | None = None) -> str | None:
     snap = load().get("sold")
     if not snap or not snap.get("items"):
         return None                               # nothing kept to fill in the older sales
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     full_at = _when(snap.get("full_at"))
     if full_at is None or now - full_at > timedelta(days=FULL_EVERY_DAYS):
         return None
@@ -314,7 +314,7 @@ def import_lists(job: dict, body: dict, now: datetime | None = None) -> dict:
                         rows.append(r)
                 full_at = prev.get("full_at")
             else:                                 # every sale was read (or an older helper read them all)
-                since, full_at = None, _utc(now or datetime.now(timezone.utc))
+                since, full_at = None, _utc(now or datetime.now(UTC))
             rows.sort(key=lambda r: r["sold_at"], reverse=True)
             data = {"items": rows, "full_at": full_at, "checked_from": since}
         save(kind, {**data, "error": None, "items_from": None})

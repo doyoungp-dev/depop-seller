@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import STYLE_HISTORY
-from .describe import STYLE_FILE, STYLE_TEMPLATE, ensure_style_file, find_claude_cli, run_claude_code, _extract_json
+from .describe import STYLE_FILE, STYLE_TEMPLATE, _extract_json, ensure_style_file, find_claude_cli, run_claude_code
 
 log = logging.getLogger(__name__)
 

@@ -103,7 +103,7 @@ def test_check_says_what_is_new_and_never_raises(monkeypatch):
     assert "internet" in updates.check()["reason"]
     monkeypatch.setattr(updates, "_get_json", fails(urllib.error.HTTPError(updates.LATEST_API, 403, "rate", {}, None)))
     assert "try again" in updates.check()["reason"]
-    import ssl                                         # reached GitHub but could not trust it: not "offline"
+    import ssl  # reached GitHub but could not trust it: not "offline"
     monkeypatch.setattr(updates, "_get_json", fails(urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate"))))
     reason = updates.check()["reason"]
     assert "certificate" in reason and "internet" not in reason

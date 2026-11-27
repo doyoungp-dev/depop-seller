@@ -164,7 +164,7 @@ def _components(mask: np.ndarray) -> tuple[np.ndarray, int]:
     h, w = mask.shape
     labels = np.zeros((h, w), dtype=np.int32)
     n = 0
-    for y0, x0 in zip(*np.nonzero(mask)):
+    for y0, x0 in zip(*np.nonzero(mask), strict=False):
         if labels[y0, x0]:
             continue
         n += 1
@@ -196,7 +196,10 @@ def drop_strays(alpha: np.ndarray, work_px: int = 192) -> np.ndarray:
     near = labels == main
     for _ in range(3):                                     # "close" = within 3 working pixels
         grown = near.copy()
-        grown[1:] |= near[:-1]; grown[:-1] |= near[1:]; grown[:, 1:] |= near[:, :-1]; grown[:, :-1] |= near[:, 1:]
+        grown[1:] |= near[:-1]
+        grown[:-1] |= near[1:]
+        grown[:, 1:] |= near[:, :-1]
+        grown[:, :-1] |= near[:, 1:]
         near = grown
     edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
     keep = np.zeros(n + 1, dtype=bool)
@@ -206,7 +209,10 @@ def drop_strays(alpha: np.ndarray, work_px: int = 192) -> np.ndarray:
                    or (area >= 0.1 * areas[main] and k not in edge))
     wanted = keep[labels]
     grown = wanted.copy()                                  # a margin, so the cut never bites the garment
-    grown[1:] |= wanted[:-1]; grown[:-1] |= wanted[1:]; grown[:, 1:] |= wanted[:, :-1]; grown[:, :-1] |= wanted[:, 1:]
+    grown[1:] |= wanted[:-1]
+    grown[:-1] |= wanted[1:]
+    grown[:, 1:] |= wanted[:, :-1]
+    grown[:, :-1] |= wanted[:, 1:]
     full = np.asarray(Image.fromarray(grown.astype(np.uint8) * 255).resize((w, h), Image.NEAREST)) > 0
     return alpha * full
 

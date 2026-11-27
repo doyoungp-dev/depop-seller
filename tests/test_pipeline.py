@@ -179,7 +179,8 @@ def test_learn_compare_and_merge_scoring():
 
     proposal = _rows([(1, 1, False), (1, 2, False), (2, 1, False), (3, 1, False), (4, 1, False), (5, 1, False)])
     truth = _rows([(1, 1, False), (1, 2, False), (1, 3, False), (3, 1, False), (0, 0, True), (3, 2, False)])
-    normalize(proposal); normalize(truth)
+    normalize(proposal)
+    normalize(truth)
     c = compare(proposal, truth)
     assert c.proposed_items == 5 and c.truth_items == 2
     assert c.false_splits == [3] and c.missed_splits == [] and c.dropped == [5]
@@ -761,9 +762,9 @@ def test_only_depop_gets_cors_and_other_sites_cannot_post(batch):
     import threading
     import urllib.error
     import urllib.request
-
-    from depop_seller.review import ReviewServer, _Server, ReviewHandler
     from functools import partial
+
+    from depop_seller.review import ReviewHandler, ReviewServer, _Server
 
     photos = scan_batch(batch)
     write_manifest(batch.manifest, decisions_to_rows(photos, group_local(batch, photos)))
@@ -879,7 +880,6 @@ def test_style_refuses_to_destroy_itself(tmp_path: Path, monkeypatch):
 def test_style_instruction_is_applied_by_claude_code_and_shown_as_a_diff(tmp_path: Path, monkeypatch):
     """The Style tab: an instruction goes to Claude Code (subscription only) and comes back as a
     proposal with a diff - the file itself is not touched until the seller accepts."""
-    from depop_seller import style
 
     style_mod, f = _style_in_tmp(tmp_path, monkeypatch)
     proposed = STYLE_SAMPLE.replace("**Y2K glam** `#y2k #mcbling`",
@@ -892,8 +892,8 @@ def test_style_instruction_is_applied_by_claude_code_and_shown_as_a_diff(tmp_pat
     assert out["summary"] == "Added a surf group." and out["credential"] == "none"
     assert "#surfergirl" in out["markdown"]
     assert not (tmp_path / "billed.txt").exists()
-    added = [l for l in out["diff"] if l.startswith("+") and not l.startswith("+++")]
-    assert any("#surfergirl" in l for l in added)
+    added = [line for line in out["diff"] if line.startswith("+") and not line.startswith("+++")]
+    assert any("#surfergirl" in line for line in added)
     assert style_mod.read_style() == STYLE_SAMPLE                          # nothing written yet
 
     style_mod.save_style(out["markdown"])

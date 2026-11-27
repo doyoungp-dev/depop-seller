@@ -12,7 +12,7 @@ from PIL import Image, ImageOps
 
 from . import config, db
 from .config import OUTPUT_JPEG_QUALITY, OUTPUT_MAX_PX, BatchPaths
-from .manifest import Row, items
+from .manifest import Row
 
 pillow_heif.register_heif_opener()
 log = logging.getLogger(__name__)

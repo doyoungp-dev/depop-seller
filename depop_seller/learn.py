@@ -90,7 +90,7 @@ def compare(proposal: list[Row], truth: list[Row]) -> Comparison:
         rows.sort(key=lambda r: r.photo_no)
         sources = Counter(p_by[r.seq].item_id for r in rows if not p_by[r.seq].skip)
         seqs = sorted(r.seq for r in rows)
-        gaps = any(b != a + 1 for a, b in zip(seqs, seqs[1:]))
+        gaps = any(b != a + 1 for a, b in zip(seqs, seqs[1:], strict=False))
         if len(sources) > 1 and gaps:
             main = min(sources)
             joined = [r.seq for r in rows if p_by[r.seq].item_id != main and not p_by[r.seq].skip]

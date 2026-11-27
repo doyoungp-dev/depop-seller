@@ -281,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     moved = config.migrate_into_data_dir()   # an older install kept its data in the app folder
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     if os.name == "nt" and not config.bundled_runtime():   # the way back in, if setup never made one
-        from .desktop import ensure_desktop_shortcut      # (the installer makes and owns its own)
+        from .desktop import ensure_desktop_shortcut  # (the installer makes and owns its own)
 
         ensure_desktop_shortcut(config.PROJECT_ROOT)
     quiet = windowless()

@@ -92,7 +92,7 @@ def group_local(
         if prev_colour is None:
             out.append(Decision(p.raw_file, False, "other", "high", "first photo"))
         else:
-            dist = sum((a - b) ** 2 for a, b in zip(colour, prev_colour)) ** 0.5
+            dist = sum((a - b) ** 2 for a, b in zip(colour, prev_colour, strict=False)) ** 0.5
             if p.gap_s > gap_break:
                 same, conf, note = False, "medium", f"gap {p.gap_s:.0f}s"
             elif p.gap_s > gap_soft and dist > colour_break:
@@ -514,7 +514,7 @@ def _align(result: WindowResult, new: list[Photo]) -> list[Decision]:
         while len(entries) < len(new):
             entries.append(PhotoDecision(file="", is_product=True, same_item_as_previous=True, view="other",
                                          confidence="low", note="missing from model output"))
-        return [_decision(p, e) for p, e in zip(new, entries)]
+        return [_decision(p, e) for p, e in zip(new, entries, strict=False)]
     return [_decision(p, by_file[p.raw_file]) for p in new]
 
 

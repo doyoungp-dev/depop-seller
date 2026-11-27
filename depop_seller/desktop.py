@@ -285,13 +285,13 @@ def move_to_trash(path: Path) -> str:
             n += 1
         try:
             shutil.move(str(path), str(target))
-        except OSError:                             # e.g. another drive, or the Trash is protected: ask Finder
+        except OSError as moving:                   # e.g. another drive, or the Trash is protected: ask Finder
             done = subprocess.run(["osascript", "-e", "on run argv",
                                    "-e", 'tell application "Finder" to delete (POSIX file (item 1 of argv) as alias)',
                                    "-e", "end run", str(path)], capture_output=True, check=False)
             if done.returncode != 0:
                 raise OSError("the Mac could not move it to the Trash: "
-                              + done.stderr.decode("utf-8", "replace").strip()[-200:])
+                              + done.stderr.decode("utf-8", "replace").strip()[-200:]) from moving
     else:
         done = subprocess.run(["gio", "trash", str(path)], capture_output=True, check=False)
         if done.returncode != 0:
