@@ -28,13 +28,14 @@ RELEASE = re.compile(r"\bdepop_seller\s+release\b(?![^;&|\n]*--dry-run)|\bgh\s+r
 COMMIT = re.compile(r"\bgit\b[^;&|\n]*\bcommit\b")
 # any way of running gh: gh, gh.exe, a quoted full path ("C:/Program Files/GitHub CLI/gh.exe")
 GH = r"\bgh(?:\.exe)?[\"']?"
-# `gh ... pr ... merge`, with flags such as -R before or between the words
-MERGE = re.compile(GH + r"\s+(?:[^;&|\n]*\s)?pr\s+(?:[^;&|\n]*\s)?merge\b")
-# the GitHub API's merge (REST pulls/N/merge, GraphQL mergePullRequest or auto-merge), however passed
-API_MERGE = re.compile(GH + r"\s+api\b[^;&|\n]*(?:/merge\b|mergePullRequest|enablePullRequestAutoMerge)")
+FLAGS = r"(?:-\S+(?:\s+[^-\s]\S*)?\s+)*"          # flags, some with a value: -R owner/repo, --repo x
+# `gh pr merge`, with flags such as -R before or between the words - but not `merge` in a title
+MERGE = re.compile(GH + r"\s+" + FLAGS + r"pr\s+" + FLAGS + r"merge\b")
+# any GitHub API call that writes: a method other than GET, a field, a body, or GraphQL
+API_WRITE = re.compile(GH + r"\s+api\b[^;&|\n]*(?:\s(?:-X|--method)[\s=]*(?!GET\b)[A-Za-z]"
+                       r"|\s(?:-f|-F|--field|--raw-field|--input)\b|\sgraphql\b)", re.IGNORECASE)
 BYPASS = re.compile(r"\s--(?:admin|auto)\b")
-PUSH = re.compile(r"\bgit\b[^;&|\n]*\bpush\b(?P<rest>[^;&|\n]*)")
-PUSH_TO_MAIN = re.compile(r"(?:^|\s)(?:\S*:)?(?:refs/heads/)?main(?:\s|$)")
+PUSH = re.compile(r"\bgit\b(?![^;&|\n]*\bstash\b)[^;&|\n]*\bpush\b(?P<rest>[^;&|\n]*)")
 CONTINUATION = re.compile(r"(?:\\|`)\r?\n")       # a bash backslash or PowerShell backtick continuation
 MAX_FILE = 2 * 1024 * 1024
 
@@ -114,19 +115,44 @@ def pending_changes(cwd: str) -> dict[str, str]:
     return out
 
 
+def pushes_main(rest: str, cwd: str) -> str | None:
+    """'deny', 'ask' or None for what follows `git push`. Only a push that clearly names another
+    branch goes ahead; anything that might reach `main`, or that cannot be read for sure, asks."""
+    words = re.sub(r"[\"'()]", " ", rest).split()
+    flags = [w for w in words if w.startswith("-")]
+    if "--mirror" in flags:                         # mirrors every branch, forced and with deletions
+        return "deny"
+    if "--all" in flags:
+        return "ask"
+    refspecs = [w for w in words if not w.startswith("-")][1:]   # the first word is the remote
+    on_main = None
+    for spec in refspecs or [""]:
+        target = spec.split(":")[-1].lstrip("+").removeprefix("refs/heads/")
+        if target in ("", "HEAD", "@"):             # nothing named: the current branch
+            if on_main is None:
+                on_main = _git(cwd, "rev-parse", "--abbrev-ref", "HEAD").strip() in ("main", "")
+            if on_main:
+                return "ask"
+        elif target == "main":
+            return "ask"
+    return None
+
+
 def check_merge(command: str, cwd: str) -> tuple[str, str] | None:
-    """A person approves every change that reaches `main`: any merge, or push to `main`, asks."""
-    merging = MERGE.search(command) or API_MERGE.search(command)
+    """A person approves every change that reaches `main`: any merge, any GitHub API call that writes,
+    and any push that might reach `main` ask; skipping the checks is stopped."""
+    merging = MERGE.search(command) or API_WRITE.search(command)
     if merging and BYPASS.search(command):
         return "deny", ("Never skip the required checks (--admin) or turn on auto-merge (--auto). Wait for the "
                         "checks, then merge normally.")
     if merging:
-        return "ask", "Merging puts this change on main, and the owner approves every merge."
+        return "ask", "This can put a change on main through GitHub, and the owner approves every change to main."
     for push in PUSH.finditer(command):
-        rest = push.group("rest")
-        names_no_branch = not re.search(r"\s[^-\s]\S*\s+[^-\s]", rest)        # `git push` or `git push origin`
-        if PUSH_TO_MAIN.search(rest) or (names_no_branch and _git(cwd, "rev-parse", "--abbrev-ref", "HEAD").strip() == "main"):
-            return "ask", "This pushes straight to main, and the owner approves every change to main."
+        verdict = pushes_main(push.group("rest"), cwd)
+        if verdict == "deny":
+            return "deny", "A mirror push overwrites and deletes branches on GitHub. Push one branch instead."
+        if verdict == "ask":
+            return "ask", "This push may reach main, and the owner approves every change to main."
     return None
 
 

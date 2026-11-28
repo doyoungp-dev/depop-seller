@@ -90,8 +90,13 @@ def test_naming_the_repo_s_own_folder_in_the_command_is_fine_but_nothing_else_pe
     "gh pr -R doyoungp-dev/depop-seller merge 7",                                # flags before the subcommand
     "gh pr merge 3 --squash && gh pr merge 9 --squash",                          # more than one
     "gh api -X PUT repos/doyoungp-dev/depop-seller/pulls/7/merge",               # the REST API
+    "gh api repos/o/r/merges -f base=main -f head=feat",                         # any API call that writes
+    "gh api --method=PATCH repos/o/r/git/refs/heads/main",
+    "gh api graphql -F query=@mutation.graphql",
     "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
     "git push origin main", "git push origin HEAD:main", "git push origin refs/heads/main",
+    'git push origin "main"', "git push origin 'feat:main'", 'bash -c "git push origin main"',
+    "powershell -Command \"git push origin main\"", "git push --all origin",
 ])
 def test_every_merge_and_every_push_to_main_waits_for_the_owner(command, tmp_path: Path):
     decision, reason = guard.decide(command, str(tmp_path), tmp_path)
@@ -101,10 +106,19 @@ def test_every_merge_and_every_push_to_main_waits_for_the_owner(command, tmp_pat
 def test_a_bare_push_from_main_waits_for_the_owner_but_one_from_a_branch_does_not(tmp_path: Path):
     repo = _repo(tmp_path)
     subprocess.run(["git", "branch", "-M", "main"], cwd=repo, check=True, capture_output=True)
-    assert guard.decide("git push", str(repo), tmp_path)[0] == "ask"
-    assert guard.decide("git push origin", str(repo), tmp_path)[0] == "ask"
+    for command in ("git push", "git push origin", "git push origin HEAD", "git push -u origin @"):
+        assert guard.decide(command, str(repo), tmp_path)[0] == "ask", command
     subprocess.run(["git", "switch", "-q", "-c", "my-change"], cwd=repo, check=True, capture_output=True)
-    assert guard.decide("git push", str(repo), tmp_path) is None
+    for command in ("git push", "git push origin HEAD", "git push -u origin my-change", "git stash push"):
+        assert guard.decide(command, str(repo), tmp_path) is None, command
+    assert guard.decide("git push --mirror origin", str(repo), tmp_path)[0] == "deny"
+
+
+@pytest.mark.parametrize("command", ["gh pr create --title 'Every merge waits for the owner'", "gh pr list --search merge",
+                                     "gh pr view 7", "gh api repos/doyoungp-dev/depop-seller/pulls/7",
+                                     "gh api -X GET repos/o/r/actions/runs"])
+def test_reading_and_creating_pull_requests_is_not_mistaken_for_a_merge(command, tmp_path: Path):
+    assert guard.decide(command, str(tmp_path), tmp_path) is None
 
 
 def test_merging_can_never_skip_the_checks_or_go_unattended(tmp_path: Path):

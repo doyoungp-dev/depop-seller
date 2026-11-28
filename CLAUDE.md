@@ -33,8 +33,10 @@ This file is the short core: the rules that apply to every task. The detail live
   automatic: branch, commits, pull request, the independent review below, fixes, and a summary for
   the owner. Then Claude merges (`gh pr merge <number> --squash --delete-branch`) only once both CI
   checks have passed, and `.claude/hooks/guard.py` puts that merge in front of the owner as an
-  approval prompt - every merge however it is spelled (any `gh ... pr ... merge`, the GitHub API's
-  merge) and every push to `main`. It stops `--admin` (which skips the required checks) and `--auto`.
+  approval prompt - every merge however it is spelled (`gh pr merge` in any form, and any GitHub
+  API call that writes) and every push that may reach `main`; only a push that clearly names another
+  branch goes ahead by itself. It stops `--admin` (which skips the required checks), `--auto` and
+  `git push --mirror`.
   A person approving every change to `main`, and every release, is the industry norm; an automatic
   "safe files" exception was tried and dropped because no file list is reliably safe in this app
   (`docs/LESSONS.md`). After merging, switch to `main`, pull, and tell the owner what was merged.
@@ -49,7 +51,7 @@ This file is the short core: the rules that apply to every task. The detail live
   with no GitHub app or secret.) Report problems that affect correctness and breaks of this file's
   rules - privacy above all - not style. Fix every confirmed finding on the branch, and review again
   if the fixes are more than trivial; then give the owner a short summary of what was found and fixed
-  (before they decide, for a change on the owner's list).
+  before they approve the merge.
 - **`main` is protected on GitHub:** no force pushes, no deletion, and a pull request cannot be merged
   until the Windows and macOS checks pass. The owner is an admin and can still push to `main`
   directly, which `release` does for its `Release X.Y.Z` commit and tag.
