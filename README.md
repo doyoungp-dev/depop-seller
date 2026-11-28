@@ -129,8 +129,8 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 
 ## Architecture at a glance
 
-Everything runs on the seller's own computer. Claude is used in two places, and Depop only ever
-sees what the seller posts.
+Everything runs on the seller's own computer. Claude is used in two places, and nothing is listed
+on Depop until the seller presses Post.
 
 ```mermaid
 flowchart TD
@@ -148,8 +148,8 @@ flowchart TD
    it and posts.
 
 The app is a small Python web server on `127.0.0.1` with plain HTML pages. Photos, listings and the
-writing style stay in one data folder, kept apart from the app, so moving to a new computer is one
-copy and updates never touch it. Details: [`docs/architecture.md`](docs/architecture.md).
+writing style live in a data folder kept apart from the app (a batch can also stay where its photos
+already are), so updates never touch them. Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## How it's built
 
