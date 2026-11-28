@@ -133,16 +133,12 @@ Everything runs on the seller's own computer. Claude is used in two places, and 
 sees what the seller posts.
 
 ```mermaid
-flowchart LR
-    P[iPhone photos] --> A
-    subgraph PC["The seller's computer"]
-        A["Depop Seller app<br/>(local, in Chrome)"] <--> D[("Data folder<br/>photos, listings, style")]
-        H["Chrome helper"]
-    end
-    A -- "group photos into items" --> API["Claude API<br/>(seller's key)"]
-    A -- "write descriptions" --> CC["Claude Code<br/>(seller's plan)"]
-    A -- "photos + description" --> H
-    H -- "fills the listing form" --> DP["Depop<br/>(seller presses Post)"]
+flowchart TD
+    P["Photos from a shoot"] --> A["Depop Seller<br/>on your computer"]
+    A -->|"1. sort into items"| G["Claude API<br/>(your API key)"]
+    A -->|"2. write descriptions"| C["Claude Code<br/>(your Claude plan)"]
+    A -->|"3. fill in the form"| H["Chrome helper"]
+    H --> D["Depop<br/>you press Post"]
 ```
 
 1. **Sort:** the seller adds a shoot's photos; Claude groups them into items, and the seller fixes
@@ -151,8 +147,9 @@ flowchart LR
 3. **List:** the Chrome helper puts the photos and description into Depop's form; the seller checks
    it and posts.
 
-The app is a small Python web server on `127.0.0.1` with plain HTML pages, and the data folder is
-kept apart from the app so it can be moved or the app updated. Details: [`docs/architecture.md`](docs/architecture.md).
+The app is a small Python web server on `127.0.0.1` with plain HTML pages. Photos, listings and the
+writing style stay in one data folder, kept apart from the app, so moving to a new computer is one
+copy and updates never touch it. Details: [`docs/architecture.md`](docs/architecture.md).
 
 ## How it's built
 
