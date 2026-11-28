@@ -22,10 +22,12 @@ other work. The owner says yes to publishing; `.claude/hooks/guard.py` asks for 
    - if `project.dependencies` in `pyproject.toml` changed: installed Windows copies will be sent to
      the new installer instead of updating in place. Raise this with the owner before going on.
    Show the notes to the owner.
-5. If the release carries changes to the app's code (`git diff --stat <last tag>..HEAD -- depop_seller
-   chrome_extension installer`), offer the owner a deep review first: "deep review everything since
-   <last tag>?". Start the `code-reviewer` agent only on their yes, fix what it confirms through a
-   pull request, and tell the owner what it found and what it could not check.
+5. If the release ships anything beyond docs and tests (`git diff --stat <last tag>..HEAD -- .
+   ':!docs' ':!tests' ':!.claude' ':!.github' ':!*.md'` lists files - app code, the helper,
+   launchers, setup scripts, `pyproject.toml`), offer the owner a deep review: "deep review
+   everything since <last tag>?". Start the `code-reviewer` agent only on their yes and tell the
+   owner what it found and what it could not check. If anything is fixed (through a pull request),
+   `main` has moved: start again from step 1, so the checkout, CI and the notes are all current.
 
 ## Publish
 
