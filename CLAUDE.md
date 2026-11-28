@@ -16,8 +16,9 @@ This file is the short core: the rules that apply to every task. The detail live
   everything local, White Background switched off.
 - `chrome_extension/CLAUDE.md` and `depop_seller/static/CLAUDE.md` - rules for the helper and for the
   pages, loaded when you work in those folders.
-- `.claude/skills/` - `release`, `mac-check` and `verify-ui`; `.claude/agents/privacy-reviewer.md`
-  checks a change for anything personal before it is committed.
+- `.claude/skills/` - `release`, `mac-check` and `verify-ui`. `.claude/agents/` - `privacy-reviewer`
+  checks a change for anything personal before it is committed; `code-reviewer` is the deep review,
+  run only when the owner asks for one.
 
 ## Reporting back to the owner
 
@@ -55,6 +56,12 @@ This file is the short core: the rules that apply to every task. The detail live
   rules - privacy above all - not style. Fix every confirmed finding on the branch, and review again
   if the fixes are more than trivial; then give the owner a short summary of what was found and fixed
   before they approve the merge.
+- **A deep review when the owner asks for one** ("deep review PR 5", "deep review before the
+  release"): start the `code-reviewer` agent with only the pull request number or the range to
+  review. It reads the repo's rules itself, runs the tests and probes the risky parts, and reports
+  findings by severity plus what it could not check. Fix what it confirms, then summarise for the
+  owner. Never start it on your own initiative - it costs far more than the quick review - but the
+  `release` skill offers it before a release that carries app code.
 - **`main` is protected on GitHub:** no force pushes, no deletion, and a pull request cannot be merged
   until the Windows and macOS checks pass. The owner is an admin and can still push to `main`
   directly, which `release` does for its `Release X.Y.Z` commit and tag.
