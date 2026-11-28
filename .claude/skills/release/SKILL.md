@@ -22,20 +22,26 @@ other work. The owner says yes to publishing; `.claude/hooks/guard.py` asks for 
    - if `project.dependencies` in `pyproject.toml` changed: installed Windows copies will be sent to
      the new installer instead of updating in place. Raise this with the owner before going on.
    Show the notes to the owner.
+5. If the release ships anything beyond docs and tests (`git diff --stat <last tag>..HEAD -- .
+   ':!docs' ':!tests' ':!.claude' ':!.github' ':!*.md'` lists files - app code, the helper,
+   launchers, setup scripts, `pyproject.toml`), offer the owner a deep review: "deep review
+   everything since <last tag>?". Start the `code-reviewer` agent only on their yes and tell the
+   owner what it found and what it could not check. If anything is fixed (through a pull request),
+   `main` has moved: start again from step 1, so the checkout, CI and the notes are all current.
 
 ## Publish
 
-5. `python -m depop_seller release X.Y.Z --notes "<notes>" --dry-run`, then fix every `!` line it
+6. `python -m depop_seller release X.Y.Z --notes "<notes>" --dry-run`, then fix every `!` line it
    reports. It builds both zips and the installer but publishes nothing.
-6. With the owner's yes: the same command without `--dry-run`. It commits `Release X.Y.Z` (versions,
+7. With the owner's yes: the same command without `--dry-run`. It commits `Release X.Y.Z` (versions,
    README buttons, `CHANGELOG.md`), tags, pushes `main` and the tag, and uploads the three files.
    Every step can be re-run after a failure.
 
 ## After
 
-7. Check `gh release view vX.Y.Z --repo doyoungp-dev/depop-seller`: `DepopSellerSetup.exe`,
+8. Check `gh release view vX.Y.Z --repo doyoungp-dev/depop-seller`: `DepopSellerSetup.exe`,
    `DepopSeller.zip` and `DepopSeller-Mac.zip` must all be there, or a download button breaks.
-8. Check that the README's two buttons show the new version, `CHANGELOG.md` has the new section, and
+9. Check that the README's two buttons show the new version, `CHANGELOG.md` has the new section, and
    CI is green on the `Release X.Y.Z` commit.
 
 Never publish a release missing one of its files, never replace a published file without the
