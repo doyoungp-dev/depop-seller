@@ -29,24 +29,18 @@ This file is the short core: the rules that apply to every task. The detail live
 - **Work on a branch, then a pull request.** `git switch -c <short-name>`, commit there, push the
   branch and open a pull request with `gh pr create`. CI (tests, Ruff and mypy on Windows and macOS)
   must pass. Small direct pushes to `main` only when the owner asks for them.
-- **Who merges: by risk.** Claude may squash-merge its own pull request when all of these hold: both
-  CI checks have passed, the independent review below left nothing unresolved, and the change touches
-  nothing on the owner's list. **The owner's list** - these wait for the owner's "merge it" after the
-  summary, and when in doubt a change is on it:
-  - updates, the installer, releases and sharing: `updates.py`, `installer.py`, `installer/`,
-    `release.py`, `share.py`, the launchers and setup scripts (`Depop Seller.cmd`, `Depop Seller.app/`,
-    `setup.ps1`, `setup.sh`, `make_desktop_icon.ps1`);
-  - anything that deletes or moves the seller's files or decides where they live: `uninstall.py`,
-    `desktop.move_to_trash`, the Delete batch and Rename code, `config.py`'s data folder and migration;
-  - billing and the API key: the billing guard in `describe.py`, key handling in `settings.py`, how
-    `group.py` uses the key;
-  - what other websites may do: the CORS and origin checks in `web.py`, and the Chrome helper
-    (`chrome_extension/`);
-  - the rules themselves: `.claude/` (settings, hook, skills, agents), `.github/`, the dependencies in
-    `pyproject.toml`, and this file.
-
-  Never turn on auto-merge; merge only after the checks have passed. After merging, switch to `main`,
-  pull, and tell the owner what was merged. Releases always wait for the owner.
+- **Who merges: by risk.** Claude may squash-merge its own pull request only when both CI checks
+  have passed, the independent review below left nothing unresolved, and **every file it changes is
+  low-risk**: `docs/`, `README.md`, `CHANGELOG.md`, `SECURITY.md`, stylesheets in
+  `depop_seller/static/`, and tests that only add checks. Everything else waits for the owner's
+  "merge it" after the summary - all of the app's code, the Chrome helper, launchers and setup,
+  `.gitignore`, `pyproject.toml`, `.claude/`, `.github/` and every CLAUDE.md - because in an app that
+  handles sellers' photos, money and privacy, almost any code change touches something that matters,
+  and a list of risky files is never complete. `.claude/hooks/guard.py` enforces this: before
+  `gh pr merge <number>` it reads the pull request's files and asks the owner when any is outside the
+  low-risk set or a test check is removed, and it stops `--admin` (skips the required checks) and
+  `--auto`. Always name the pull request's number. After merging, switch to `main`, pull, and tell
+  the owner what was merged. Releases always wait for the owner.
 - **An independent review before merging.** After opening a pull request, have it reviewed
   by a Claude that did not write it, so the review starts without this conversation's assumptions:
   run `/code-review <PR number>` from a new Claude Code session, or start a fresh subagent (never a
@@ -94,7 +88,7 @@ Each is explained, with its tests, in `docs/architecture.md` (section named in b
 - **Everything committed is public - code, docs, tests and commit messages alike.** Nothing personal is ever committed: no photos, no `manifest.csv` (the grouping), no `depop_seller.db`, no `.env`, not the seller's own `description_style.md`, no local paths (a Windows home folder contains a real name), no shop handle, no real listings, no family or friends. All of that lives in the data folder outside the repo (see Data layout). Commit messages describe the software, never whose shop or which batch prompted a change.
 - **A personal project, not work.** The GitHub account is also used for the owner's job and belongs to an organization there: never list, clone, read or call any organization's repositories or APIs, and never suggest company resources (org Actions, org repos, a work email) for this project. The login on the owner's machines can also reach the organization (the owner's choice); this project still only ever touches `doyoungp-dev/depop-seller` and `doyoungp-dev/depop_seller-archive`. CI notification emails follow the account's notification settings, not this repo.
 - Commits are made with the repo-local git identity that is already configured (the owner's); do not change it.
-- Never commit images. `raw_image/`, `sort_image/`, `thumbs/` and the whole `product_image/` tree are gitignored. In `.claude/` only `settings.json`, `hooks/`, `skills/` and `agents/` are committed (everything else there stays on each computer, and none of it ships in the app): the settings deny reading or editing any `.env`, turn commit attribution off, and run `.claude/hooks/guard.py` before every shell command - it stops a commit that would publish this computer's home folder, the user's name or a real-looking key, stops force pushes, and asks before a release is published (`tests/test_guard.py`). If the guard stops something, fix the cause; never work around it.
+- Never commit images. `raw_image/`, `sort_image/`, `thumbs/` and the whole `product_image/` tree are gitignored. In `.claude/` only `settings.json`, `hooks/`, `skills/` and `agents/` are committed (everything else there stays on each computer, and none of it ships in the app): the settings deny reading or editing any `.env`, turn commit attribution off, and run `.claude/hooks/guard.py` before every shell command - it stops a commit that would publish this computer's home folder, the user's name or a real-looking key, stops force pushes, asks before a release is published, and asks before merging any pull request that is not low-risk (`tests/test_guard.py`). If the guard stops something, fix the cause; never work around it.
 - Never commit secrets. `ANTHROPIC_API_KEY` is read from the environment, falling back to `.env` in the data folder (and, for old installs, the app folder). Never read, print, or edit a `.env`; never ask the user to paste a key into chat. Test fixtures use keys that are obviously fake (`sk-ant-test-...`), never the real `sk-ant-api03-` shape, which secret scanners flag.
 - **No cloud infrastructure.** Everything runs on the user's own computer (local files, local SQLite). The only network calls are the Anthropic API for photo grouping, Claude Code on the user's subscription for descriptions, and Depop's website in the user's own Chrome, plus (only while the switched-off White Background feature is on) one download of its cut-out model from GitHub, made only after the user confirms it in the Review page. Do not propose or add hosted services, containers or deployment tooling. GitHub Releases are how the app is distributed and updated; that is the one exception, and the app only talks to GitHub when the user presses **Check for updates** or **Update** in Settings - never in the background. **CI (since 2026-11-01, owner's call):** `.github/workflows/tests.yml` runs the whole test suite with pytest on GitHub's `windows-latest` and `macos-latest` runners (Python 3.14, `pip install -e .[dev]`) on every push to `main`, every pull request, and by hand from the Actions tab - free on this public repo. It only tests: it builds and publishes nothing, needs no secrets (never give it the API key), and `release` still runs the tests locally and publishes by hand. A red X on a commit means a test failed on that system - read the log on the Actions tab before releasing. It cannot click dialogs, Gatekeeper or Depop, so the MacBook still checks those by hand. `.github` is in `share.SKIP_DIRS`: it is not part of the app.
 - **Releases** are one command on the Windows machine: `python -m depop_seller release [X.Y.Z] [--notes ...] [--dry-run]` - use the `release` skill. It refuses a dirty tree or a branch other than `main`, and refuses unless this checkout is a fast-forward of `origin/main` with the same root commit - **that guard is what keeps the private pre-publication history from ever reaching the public repo, even through a tag**. It runs the tests, writes the version everywhere it lives (including the README's two download buttons and `CHANGELOG.md`), builds `DepopSeller.zip`, `DepopSeller-Mac.zip` and the Windows installer, tags, pushes and publishes all three files. Default notes are the commit subjects since the last release. Pushing to `main` reaches no user by itself. Details: docs/architecture.md (Releases).

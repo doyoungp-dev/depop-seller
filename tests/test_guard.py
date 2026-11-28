@@ -83,6 +83,41 @@ def test_naming_the_repo_s_own_folder_in_the_command_is_fine_but_nothing_else_pe
     assert decision == "deny"
 
 
+def _fake_pr(monkeypatch, files: list[str], patch: str = ""):
+    def gh(cwd, *args):
+        return chr(10).join(files) + chr(10) if "--name-only" in args else patch
+    monkeypatch.setattr(guard, "_gh", gh)
+
+
+def test_claude_merges_only_docs_stylesheets_and_added_tests_by_itself(tmp_path: Path, monkeypatch):
+    _fake_pr(monkeypatch, ["docs/LESSONS.md", "README.md", "tests/test_shop.py", "depop_seller/static/app.css"],
+             "+    assert new_check()" + chr(10))
+    assert guard.decide("gh pr merge 7 --squash --delete-branch", str(tmp_path), tmp_path) is None
+
+
+@pytest.mark.parametrize("changed", [["depop_seller/review.py"], [".gitignore"], ["CLAUDE.md"],
+                                     ["chrome_extension/CLAUDE.md"], [".claude/hooks/guard.py"], ["pyproject.toml"],
+                                     ["docs/x.md", "depop_seller/manifest.py"], ["depop_seller/static/sell.html"]])
+def test_a_pull_request_touching_anything_else_waits_for_the_owner(changed, tmp_path: Path, monkeypatch):
+    _fake_pr(monkeypatch, changed)
+    decision, reason = guard.decide("gh pr merge 7 --squash", str(tmp_path), tmp_path)
+    assert decision == "ask" and "owner" in reason and changed[-1] in reason
+
+
+def test_a_removed_test_check_waits_for_the_owner(tmp_path: Path, monkeypatch):
+    _fake_pr(monkeypatch, ["tests/test_guard.py"], "-    assert guard.decide(x) is None" + chr(10))
+    assert guard.decide("gh pr merge 7 --squash", str(tmp_path), tmp_path)[0] == "ask"
+
+
+def test_merging_can_never_skip_the_checks_or_go_unattended(tmp_path: Path, monkeypatch):
+    _fake_pr(monkeypatch, ["docs/x.md"])
+    for command in ("gh pr merge 7 --admin --squash", "gh pr merge 7 --squash --auto"):
+        assert guard.decide(command, str(tmp_path), tmp_path)[0] == "deny"
+    assert guard.decide("gh pr merge --squash", str(tmp_path), tmp_path)[0] == "ask"        # which one?
+    monkeypatch.setattr(guard, "_gh", lambda cwd, *args: None)                               # gh missing or failing
+    assert guard.decide("gh pr merge 7 --squash", str(tmp_path), tmp_path)[0] == "ask"
+
+
 def test_the_hook_answers_claude_code_in_its_own_format(tmp_path: Path):
     payload = json.dumps({"tool_name": "Bash", "cwd": str(tmp_path), "tool_input": {"command": "git push -f"}})
     done = subprocess.run([sys.executable, str(GUARD)], input=payload, capture_output=True, text=True, check=True)
