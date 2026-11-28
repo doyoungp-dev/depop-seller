@@ -33,9 +33,9 @@ def test_publishing_a_release_asks_the_owner(command, tmp_path: Path):
     assert guard.decide(command, str(tmp_path), tmp_path)[0] == "ask"
 
 
-@pytest.mark.parametrize("command", ["git status", "git push origin main", "git push -u origin main",
+@pytest.mark.parametrize("command", ["git status", "git push origin my-change", "git push -u origin my-change",
                                      "python -m depop_seller release --dry-run", "gh release list",
-                                     "python -m pytest -q"])
+                                     "gh pr create --title x", "gh pr view 7", "python -m pytest -q"])
 def test_ordinary_commands_pass(command, tmp_path: Path):
     assert guard.decide(command, str(tmp_path), tmp_path) is None
 
@@ -81,6 +81,75 @@ def test_naming_the_repo_s_own_folder_in_the_command_is_fine_but_nothing_else_pe
         assert guard.decide(f'cd "{spelling}" && git commit -m tidy', str(repo), home) is None
     decision, _ = guard.decide(f'git commit -m "photos live in {home}/Pictures"', str(repo), home)
     assert decision == "deny"
+
+
+@pytest.mark.parametrize("command", [
+    "gh pr merge 7 --squash --delete-branch",
+    '"C:/Program Files/GitHub CLI/gh.exe" pr merge 7 --squash',                 # a full path, quoted
+    "gh.exe pr merge 7",
+    "gh pr -R doyoungp-dev/depop-seller merge 7",                                # flags before the subcommand
+    "gh pr merge 3 --squash && gh pr merge 9 --squash",                          # more than one
+    "gh api -X PUT repos/doyoungp-dev/depop-seller/pulls/7/merge",               # the REST API
+    "gh api repos/o/r/merges -f base=main -f head=feat",                         # any API call that writes
+    "gh api --method=PATCH repos/o/r/git/refs/heads/main",
+    "gh api -X 'PUT' repos/o/r/pulls/7/merge", "gh api repos/o/r/merges -fbase=main -fhead=feat",
+    "gh api graphql -F query=@mutation.graphql",
+    "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+    "git push origin main", "git push origin HEAD:main", "git push origin refs/heads/main",
+    'git push origin "main"', "git push origin 'feat:main'", 'bash -c "git push origin main"',
+    "powershell -Command \"git push origin main\"", "git push --all origin",
+])
+def test_every_merge_and_every_push_to_main_waits_for_the_owner(command, tmp_path: Path):
+    decision, reason = guard.decide(command, str(tmp_path), tmp_path)
+    assert decision == "ask" and "owner" in reason
+
+
+def test_a_bare_push_from_main_waits_for_the_owner_but_one_from_a_branch_does_not(tmp_path: Path):
+    repo = _repo(tmp_path)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, check=True, capture_output=True)
+    for command in ("git push", "git push origin", "git push origin HEAD", "git push -u origin @",
+                    "git push origin 2>&1", "git push origin 2>&1 | tee log", "git push origin > out.txt",
+                    "git push -o ci.skip origin", "git.exe push origin"):
+        assert guard.decide(command, str(repo), tmp_path)[0] == "ask", command
+    for command in ("git log --grep push", "git help push", "git config --get push.default",
+                    'git commit -m "The guard asks before any push that may reach main"'):
+        assert guard.decide(command, str(repo), tmp_path) is None, command          # not pushes at all
+    subprocess.run(["git", "switch", "-q", "-c", "my-change"], cwd=repo, check=True, capture_output=True)
+    for command in ("git push", "git push origin HEAD", "git push -u origin my-change", "git stash push",
+                    "git push origin my-change 2>&1", "git push --dry-run origin main"):
+        assert guard.decide(command, str(repo), tmp_path) is None, command
+    for command in ("git push origin my-change:heads/main", "git push --repo=origin main", "git push --all origin",
+                    "git -C ../elsewhere push", "cd ../elsewhere && git push", "git push origin HEAD:refs/heads/main",
+                    "git switch main && git merge my-change && git push",           # onto main in the same line
+                    "git checkout main; git pull; git push origin HEAD", 'git push origin "$BRANCH"',
+                    "Push-Location ../elsewhere; git push"):
+        assert guard.decide(command, str(repo), tmp_path)[0] == "ask", command
+    for command in ("git switch -c another && git push -u origin HEAD", "git push -uq origin my-change",
+                    "git switch my-change && git push"):
+        assert guard.decide(command, str(repo), tmp_path) is None, command
+    for command in ("git push --mirror origin", "gh pr merge 7 --squash && git push --mirror origin"):
+        assert guard.decide(command, str(repo), tmp_path)[0] == "deny", command
+
+
+@pytest.mark.parametrize("command", ["gh pr create --title 'Every merge waits for the owner'", "gh pr list --search merge",
+                                     "gh pr view 7", "gh api repos/doyoungp-dev/depop-seller/pulls/7",
+                                     "gh api -X GET repos/o/r/actions/runs", "gh api -X GET search/issues -f q=x",
+                                     "gh api graphql -f query='query { viewer { login } }'"])
+def test_reading_and_creating_pull_requests_is_not_mistaken_for_a_merge(command, tmp_path: Path):
+    assert guard.decide(command, str(tmp_path), tmp_path) is None
+
+
+def test_merging_can_never_skip_the_checks_or_go_unattended(tmp_path: Path):
+    bash_newline, ps_newline = chr(92) + chr(10), "`" + chr(10)                 # line continuations
+    for command in ("gh pr merge 7 --admin --squash", "gh pr merge 7 --squash --auto", "gh pr merge 7 --admin=true",
+                    "gh pr merge 7 --squash " + bash_newline + "  --admin", "gh pr merge 7 " + ps_newline + " --auto"):
+        assert guard.decide(command, str(tmp_path), tmp_path)[0] == "deny", command
+
+
+def test_one_part_of_a_command_cannot_switch_off_another_check(tmp_path: Path):
+    repo, home = _repo(tmp_path), tmp_path / "Users" / "Some Body"
+    decision, reason = guard.decide(f'git commit -m "see {home}" && gh pr merge 7 --squash', str(repo), home)
+    assert decision == "deny" and "public" in reason                            # the commit check still ran
 
 
 def test_the_hook_answers_claude_code_in_its_own_format(tmp_path: Path):
