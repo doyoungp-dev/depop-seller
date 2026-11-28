@@ -119,8 +119,14 @@ def test_a_bare_push_from_main_waits_for_the_owner_but_one_from_a_branch_does_no
                     "git push origin my-change 2>&1", "git push --dry-run origin main"):
         assert guard.decide(command, str(repo), tmp_path) is None, command
     for command in ("git push origin my-change:heads/main", "git push --repo=origin main", "git push --all origin",
-                    "git -C ../elsewhere push", "cd ../elsewhere && git push", "git push origin HEAD:refs/heads/main"):
+                    "git -C ../elsewhere push", "cd ../elsewhere && git push", "git push origin HEAD:refs/heads/main",
+                    "git switch main && git merge my-change && git push",           # onto main in the same line
+                    "git checkout main; git pull; git push origin HEAD", 'git push origin "$BRANCH"',
+                    "Push-Location ../elsewhere; git push"):
         assert guard.decide(command, str(repo), tmp_path)[0] == "ask", command
+    for command in ("git switch -c another && git push -u origin HEAD", "git push -uq origin my-change",
+                    "git switch my-change && git push"):
+        assert guard.decide(command, str(repo), tmp_path) is None, command
     for command in ("git push --mirror origin", "gh pr merge 7 --squash && git push --mirror origin"):
         assert guard.decide(command, str(repo), tmp_path)[0] == "deny", command
 

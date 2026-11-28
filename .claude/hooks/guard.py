@@ -37,7 +37,9 @@ BYPASS = re.compile(r"\s--(?:admin|auto)\b")
 # `git log --grep push` or a commit message about pushing is not taken for one
 PUSH = re.compile(r"\bgit(?:\.exe)?[\"']?\s+(?P<globals>(?:(?:-C|-c)\s+\S+\s+|--?[\w-]+(?:=\S+)?\s+)*)"
                   r"push\b(?P<rest>[^;&|\n]*)")
-ELSEWHERE = re.compile(r"(?:^|[;&|(\s])(?:cd|chdir|pushd|Set-Location|sl)\s", re.IGNORECASE)
+ELSEWHERE = re.compile(r"(?:^|[;&|(\s])(?:cd|chdir|pushd|Set-Location|Push-Location|sl)\s", re.IGNORECASE)
+# `git switch <branch>` / `git checkout <branch>` earlier in the same command changes what a bare push sends
+SWITCH = re.compile(r"\bgit(?:\.exe)?[\"']?\s+(?:switch|checkout)\b(?P<rest>[^;&|\n]*)")
 # push options that take no value; any other option may hide a remote or a branch, so it asks
 PUSH_FLAGS = {"-u", "--set-upstream", "-v", "--verbose", "-q", "--quiet", "--tags", "--follow-tags",
               "--no-verify", "--verify", "--progress", "--no-progress", "--porcelain", "-4", "-6", "--ipv4",
@@ -127,7 +129,12 @@ def pushes_main(rest: str, cwd: str, elsewhere: bool = False) -> str | None:
     `elsewhere`: the push runs in another checkout (`-C`, `cd ...`), whose branch is unknown."""
     rest = re.split(r"\s*\d*[<>]", rest)[0]         # a redirect (2>&1, > log) is not a refspec
     words = re.sub(r"[\"'()]", " ", rest).split()
-    flags = [w for w in words if w.startswith("-")]
+    flags = []
+    for w in (w for w in words if w.startswith("-")):
+        # combined short options (-uq) are the single ones (-u -q)
+        flags += [f"-{c}" for c in w[1:]] if re.fullmatch(r"-[a-z]{2,}", w) else [w]
+    if any(c in w for w in words for c in "$%`"):   # a branch held in a variable cannot be read
+        return "ask"
     if "--mirror" in flags:                         # mirrors every branch, forced and with deletions
         return "deny"
     if "-n" in flags or "--dry-run" in flags:       # changes nothing
@@ -173,7 +180,14 @@ def check_merge(command: str, cwd: str) -> tuple[str, str] | None:
         verdicts.append(("ask", "This can put a change on main through GitHub, and the owner approves every change to main."))
     moved = bool(ELSEWHERE.search(command))
     for push in PUSH.finditer(command):
-        elsewhere = moved or bool(re.search(r"(?:^|\s)(?:-C|--git-dir|--work-tree)\b", push.group("globals")))
+        switched = False
+        for switch in SWITCH.finditer(command[:push.start()]):
+            words = re.sub(r"[\"'()]", " ", switch.group("rest")).split()
+            new_branch = any(w in ("-c", "-C", "-b", "-B", "--create", "--orphan") for w in words)
+            named = [w for w in words if not w.startswith("-")]
+            switched = switched or (not new_branch and (not named or named[0] in ("main", "-", "@{-1}")))
+        elsewhere = (moved or switched
+                     or bool(re.search(r"(?:^|\s)(?:-C|--git-dir|--work-tree)\b", push.group("globals"))))
         verdict = pushes_main(push.group("rest"), cwd, elsewhere)
         if verdict == "deny":
             verdicts.append(("deny", "A mirror push overwrites and deletes branches on GitHub. Push one branch instead."))
