@@ -54,8 +54,9 @@ This file is the short core: the rules that apply to every task. The detail live
   session and nothing is posted. (Claude Code's best practices; it runs on the owner's subscription,
   with no GitHub app or secret.) Report problems that affect correctness and breaks of this file's
   rules - privacy above all - not style. Fix every confirmed finding on the branch, and review again
-  if the fixes are more than trivial; then give the owner a short summary of what was found and fixed
-  before they approve the merge.
+  if the fixes are more than trivial - at most twice: if problems remain after two re-reviews, stop
+  and bring them to the owner, who decides how to go on. Then give the owner a short summary of what
+  was found and fixed before they approve the merge.
 - **A deep review when the owner asks for one** ("deep review PR 5", "deep review before the
   release"): start the `code-reviewer` agent with only the pull request number or the range to
   review. It reads the repo's rules itself, runs the tests and probes the risky parts, and reports

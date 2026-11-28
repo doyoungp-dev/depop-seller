@@ -127,6 +127,30 @@ you to the new `DepopSellerSetup.exe`, which upgrades your copy in place.
 
 ---
 
+## Architecture at a glance
+
+Everything runs on the seller's own computer. Claude is used in two places, and nothing is listed
+on Depop until the seller presses Post.
+
+```mermaid
+flowchart TD
+    P["Photos from a shoot"] --> A["Depop Seller<br/>on your computer"]
+    A -->|"1. sort into items"| G["Claude API<br/>(your API key)"]
+    A -->|"2. write descriptions"| C["Claude Code<br/>(your Claude plan)"]
+    A -->|"3. fill in the form"| H["Chrome helper"]
+    H --> D["Depop<br/>you press Post"]
+```
+
+1. **Sort:** the seller adds a shoot's photos; Claude groups them into items, and the seller fixes
+   anything by drag and drop.
+2. **Describe:** Claude writes each item's description in the seller's own style.
+3. **List:** the Chrome helper puts the photos and description into Depop's form; the seller checks
+   it and posts.
+
+The app is a small Python web server on `127.0.0.1` with plain HTML pages. Photos, listings and the
+writing style live in a data folder kept apart from the app (a batch can also stay where its photos
+already are), so updates never touch them. Details: [`docs/architecture.md`](docs/architecture.md).
+
 ## How it's built
 
 [![tests](https://github.com/doyoungp-dev/depop-seller/actions/workflows/tests.yml/badge.svg)](https://github.com/doyoungp-dev/depop-seller/actions/workflows/tests.yml)

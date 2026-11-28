@@ -131,15 +131,16 @@ and any push to `main`, stops `--admin` and `--auto`, and runs every check on ev
 the strictest answer. Tests: `test_every_merge_and_every_push_to_main_waits_for_the_owner`,
 `test_one_part_of_a_command_cannot_switch_off_another_check`.
 
-Two more fresh reviews of the new guard each found more ways a command could slip past it (a
-`git push origin 2>&1`, an option whose value looked like a branch name, a quoted API method), and
-named tricks no text check can ever catch. The guard now lets through only what clearly cannot reach
+Three more fresh reviews of the new guard each found more ways a command could slip past it (a
+`git push origin 2>&1`, an option whose value looked like a branch name, a quoted API method, a
+switch to `main` earlier in the same command), and named tricks no text check can ever catch. The guard now lets through only what clearly cannot reach
 `main` and asks about everything else; it is described as what it is - a seatbelt against slips, with
 GitHub's branch protection and the owner's approval as the real gates.
 
 **Lesson.** Automate the work, not the approval. A guard that reads text should allow what is
 clearly safe rather than try to list every danger. And an independent reviewer earns its keep: all
-four reviews found what the author had not.
+five reviews found what the author had not. Five rounds on one change was also too many to run
+without the owner deciding, so re-reviews are now capped at two (CLAUDE.md).
 
 ## Smaller ones
 
