@@ -28,10 +28,26 @@ This file is the short core: the rules that apply to every task. The detail live
 
 - **Work on a branch, then a pull request.** `git switch -c <short-name>`, commit there, push the
   branch and open a pull request with `gh pr create`. CI (tests, Ruff and mypy on Windows and macOS)
-  must pass; the owner reviews the diff and merges it with a squash merge. Never merge a pull request
-  or turn on auto-merge yourself unless the owner says so for that pull request. Small direct pushes
-  to `main` only when the owner asks for them.
-- **An independent review before the owner merges.** After opening a pull request, have it reviewed
+  must pass. Small direct pushes to `main` only when the owner asks for them.
+- **Who merges: by risk.** Claude may squash-merge its own pull request when all of these hold: both
+  CI checks have passed, the independent review below left nothing unresolved, and the change touches
+  nothing on the owner's list. **The owner's list** - these wait for the owner's "merge it" after the
+  summary, and when in doubt a change is on it:
+  - updates, the installer, releases and sharing: `updates.py`, `installer.py`, `installer/`,
+    `release.py`, `share.py`, the launchers and setup scripts (`Depop Seller.cmd`, `Depop Seller.app/`,
+    `setup.ps1`, `setup.sh`, `make_desktop_icon.ps1`);
+  - anything that deletes or moves the seller's files or decides where they live: `uninstall.py`,
+    `desktop.move_to_trash`, the Delete batch and Rename code, `config.py`'s data folder and migration;
+  - billing and the API key: the billing guard in `describe.py`, key handling in `settings.py`, how
+    `group.py` uses the key;
+  - what other websites may do: the CORS and origin checks in `web.py`, and the Chrome helper
+    (`chrome_extension/`);
+  - the rules themselves: `.claude/` (settings, hook, skills, agents), `.github/`, the dependencies in
+    `pyproject.toml`, and this file.
+
+  Never turn on auto-merge; merge only after the checks have passed. After merging, switch to `main`,
+  pull, and tell the owner what was merged. Releases always wait for the owner.
+- **An independent review before merging.** After opening a pull request, have it reviewed
   by a Claude that did not write it, so the review starts without this conversation's assumptions:
   run `/code-review <PR number>` from a new Claude Code session, or start a fresh subagent (never a
   fork, which inherits this conversation) whose prompt holds only the PR number and the task - not
@@ -42,7 +58,7 @@ This file is the short core: the rules that apply to every task. The detail live
   with no GitHub app or secret.) Report problems that affect correctness and breaks of this file's
   rules - privacy above all - not style. Fix every confirmed finding on the branch, and review again
   if the fixes are more than trivial; then give the owner a short summary of what was found and fixed
-  before they merge.
+  (before they decide, for a change on the owner's list).
 - **`main` is protected on GitHub:** no force pushes, no deletion, and a pull request cannot be merged
   until the Windows and macOS checks pass. The owner is an admin and can still push to `main`
   directly, which `release` does for its `Release X.Y.Z` commit and tag.
