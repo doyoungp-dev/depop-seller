@@ -36,7 +36,10 @@ This file is the short core: the rules that apply to every task. The detail live
   approval prompt - every merge however it is spelled (`gh pr merge` in any form, and any GitHub
   API call that writes) and every push that may reach `main`; only a push that clearly names another
   branch goes ahead by itself. It stops `--admin` (which skips the required checks), `--auto` and
-  `git push --mirror`.
+  `git push --mirror`. The guard is a seatbelt against slips, not a lock: it reads command text, and
+  a determined command (an alias, a git setting) could get past it - so never look for a way around
+  it, and when it asks, the answer is the owner's. GitHub's branch protection is the hard gate for
+  checks on every pull request.
   A person approving every change to `main`, and every release, is the industry norm; an automatic
   "safe files" exception was tried and dropped because no file list is reliably safe in this app
   (`docs/LESSONS.md`). After merging, switch to `main`, pull, and tell the owner what was merged.

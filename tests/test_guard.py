@@ -92,6 +92,7 @@ def test_naming_the_repo_s_own_folder_in_the_command_is_fine_but_nothing_else_pe
     "gh api -X PUT repos/doyoungp-dev/depop-seller/pulls/7/merge",               # the REST API
     "gh api repos/o/r/merges -f base=main -f head=feat",                         # any API call that writes
     "gh api --method=PATCH repos/o/r/git/refs/heads/main",
+    "gh api -X 'PUT' repos/o/r/pulls/7/merge", "gh api repos/o/r/merges -fbase=main -fhead=feat",
     "gh api graphql -F query=@mutation.graphql",
     "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
     "git push origin main", "git push origin HEAD:main", "git push origin refs/heads/main",
@@ -106,17 +107,28 @@ def test_every_merge_and_every_push_to_main_waits_for_the_owner(command, tmp_pat
 def test_a_bare_push_from_main_waits_for_the_owner_but_one_from_a_branch_does_not(tmp_path: Path):
     repo = _repo(tmp_path)
     subprocess.run(["git", "branch", "-M", "main"], cwd=repo, check=True, capture_output=True)
-    for command in ("git push", "git push origin", "git push origin HEAD", "git push -u origin @"):
+    for command in ("git push", "git push origin", "git push origin HEAD", "git push -u origin @",
+                    "git push origin 2>&1", "git push origin 2>&1 | tee log", "git push origin > out.txt",
+                    "git push -o ci.skip origin", "git.exe push origin"):
         assert guard.decide(command, str(repo), tmp_path)[0] == "ask", command
+    for command in ("git log --grep push", "git help push", "git config --get push.default",
+                    'git commit -m "The guard asks before any push that may reach main"'):
+        assert guard.decide(command, str(repo), tmp_path) is None, command          # not pushes at all
     subprocess.run(["git", "switch", "-q", "-c", "my-change"], cwd=repo, check=True, capture_output=True)
-    for command in ("git push", "git push origin HEAD", "git push -u origin my-change", "git stash push"):
+    for command in ("git push", "git push origin HEAD", "git push -u origin my-change", "git stash push",
+                    "git push origin my-change 2>&1", "git push --dry-run origin main"):
         assert guard.decide(command, str(repo), tmp_path) is None, command
-    assert guard.decide("git push --mirror origin", str(repo), tmp_path)[0] == "deny"
+    for command in ("git push origin my-change:heads/main", "git push --repo=origin main", "git push --all origin",
+                    "git -C ../elsewhere push", "cd ../elsewhere && git push", "git push origin HEAD:refs/heads/main"):
+        assert guard.decide(command, str(repo), tmp_path)[0] == "ask", command
+    for command in ("git push --mirror origin", "gh pr merge 7 --squash && git push --mirror origin"):
+        assert guard.decide(command, str(repo), tmp_path)[0] == "deny", command
 
 
 @pytest.mark.parametrize("command", ["gh pr create --title 'Every merge waits for the owner'", "gh pr list --search merge",
                                      "gh pr view 7", "gh api repos/doyoungp-dev/depop-seller/pulls/7",
-                                     "gh api -X GET repos/o/r/actions/runs"])
+                                     "gh api -X GET repos/o/r/actions/runs", "gh api -X GET search/issues -f q=x",
+                                     "gh api graphql -f query='query { viewer { login } }'"])
 def test_reading_and_creating_pull_requests_is_not_mistaken_for_a_merge(command, tmp_path: Path):
     assert guard.decide(command, str(tmp_path), tmp_path) is None
 
