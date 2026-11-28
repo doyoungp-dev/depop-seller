@@ -4,9 +4,11 @@
   key or GitHub token is stopped: everything committed here is public.
 - A force push, which would rewrite the public history, is stopped.
 - Publishing a release, which reaches every installed copy, needs the owner's yes.
-- Merging a pull request goes ahead by itself only when it changes nothing but docs, stylesheets and
-  tests (and removes no test check); anything else needs the owner's yes. Skipping the required
-  checks (--admin) or turning on auto-merge (--auto) is stopped.
+- Merging a pull request, or pushing to `main`, needs the owner's yes however it is spelled: a
+  person approves every change that reaches `main`. Skipping the required checks (--admin) or turning
+  on auto-merge (--auto) is stopped.
+
+Every check runs on every command and the strictest answer wins (stop, then ask, then run).
 
 Reads the hook payload on stdin and answers with a PreToolUse decision on stdout; says nothing when
 the command is fine. Standard library only, so it runs on Windows and macOS alike.
@@ -16,7 +18,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -25,10 +26,16 @@ KEY = re.compile(r"sk-ant-api\d\d-[A-Za-z0-9_-]{20,}|\bgh[pousr]_[A-Za-z0-9]{30,
 FORCE_PUSH = re.compile(r"\bgit\b[^;&|\n]*\bpush\b[^;&|\n]*(\s--force(-with-lease)?\b|\s-[a-zA-Z]*f\b|\s\+[^\s]+)")
 RELEASE = re.compile(r"\bdepop_seller\s+release\b(?![^;&|\n]*--dry-run)|\bgh\s+release\s+(create|delete|upload|edit)\b")
 COMMIT = re.compile(r"\bgit\b[^;&|\n]*\bcommit\b")
-MERGE = re.compile(r"\bgh\s+pr\s+merge\b")
-MERGE_NUMBER = re.compile(r"\bgh\s+pr\s+merge\s+(?:-\S+\s+)*#?(\d+)\b")
-MERGE_BYPASS = re.compile(r"\bgh\s+pr\s+merge\b[^;&|\n]*\s--(admin|auto)\b")
-REMOVED_CHECK = re.compile(r"^-(?!--)\s*(assert\b|def test_|with pytest\.raises|pytest\.raises)")
+# any way of running gh: gh, gh.exe, a quoted full path ("C:/Program Files/GitHub CLI/gh.exe")
+GH = r"\bgh(?:\.exe)?[\"']?"
+# `gh ... pr ... merge`, with flags such as -R before or between the words
+MERGE = re.compile(GH + r"\s+(?:[^;&|\n]*\s)?pr\s+(?:[^;&|\n]*\s)?merge\b")
+# the GitHub API's merge (REST pulls/N/merge, GraphQL mergePullRequest or auto-merge), however passed
+API_MERGE = re.compile(GH + r"\s+api\b[^;&|\n]*(?:/merge\b|mergePullRequest|enablePullRequestAutoMerge)")
+BYPASS = re.compile(r"\s--(?:admin|auto)\b")
+PUSH = re.compile(r"\bgit\b[^;&|\n]*\bpush\b(?P<rest>[^;&|\n]*)")
+PUSH_TO_MAIN = re.compile(r"(?:^|\s)(?:\S*:)?(?:refs/heads/)?main(?:\s|$)")
+CONTINUATION = re.compile(r"(?:\\|`)\r?\n")       # a bash backslash or PowerShell backtick continuation
 MAX_FILE = 2 * 1024 * 1024
 
 
@@ -107,67 +114,52 @@ def pending_changes(cwd: str) -> dict[str, str]:
     return out
 
 
-def low_risk(path: str) -> bool:
-    """A file Claude may merge a change to without the owner: docs, stylesheets and tests. Anything
-    else - the app's code, its rules and settings, any CLAUDE.md - waits for the owner."""
-    if Path(path).name == "CLAUDE.md":
-        return False
-    return (path.startswith("docs/") or path in ("README.md", "CHANGELOG.md", "SECURITY.md")
-            or path.startswith("tests/") or (path.startswith("depop_seller/static/") and path.endswith(".css")))
-
-
-def _gh(cwd: str, *args: str) -> str | None:
-    """`gh`'s output, or None when it is missing or fails (then the owner is asked instead)."""
-    exe = shutil.which("gh") or next((p for p in (r"C:\Program Files\GitHub CLI\gh.exe", "/opt/homebrew/bin/gh",
-                                                  "/usr/local/bin/gh") if Path(p).is_file()), None)
-    if exe is None:
-        return None
-    done = subprocess.run([exe, *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", check=False)
-    return done.stdout if done.returncode == 0 else None
-
-
-def review_merge(command: str, cwd: str) -> tuple[str, str] | None:
-    """A merge goes ahead by itself only for a pull request that changes nothing but docs, stylesheets
-    and tests, and removes no test check; the owner says yes to anything else."""
-    if MERGE_BYPASS.search(command):
+def check_merge(command: str, cwd: str) -> tuple[str, str] | None:
+    """A person approves every change that reaches `main`: any merge, or push to `main`, asks."""
+    merging = MERGE.search(command) or API_MERGE.search(command)
+    if merging and BYPASS.search(command):
         return "deny", ("Never skip the required checks (--admin) or turn on auto-merge (--auto). Wait for the "
                         "checks, then merge normally.")
-    number = MERGE_NUMBER.search(command)
-    if not number:
-        return "ask", "Merging a pull request without its number: the owner decides which one."
-    names = _gh(cwd, "pr", "diff", number.group(1), "--name-only")
-    patch = _gh(cwd, "pr", "diff", number.group(1))
-    if names is None or patch is None:
-        return "ask", f"The guard could not read pull request {number.group(1)}'s changes, so the owner decides."
-    owners = [name for name in names.split() if not low_risk(name)]
-    removed_checks = [line for line in patch.splitlines() if REMOVED_CHECK.match(line)]
-    if owners or removed_checks:
-        why = []
-        if owners:
-            why.append("it changes " + ", ".join(owners[:4]) + (" and more" if len(owners) > 4 else ""))
-        if removed_checks:
-            why.append("it removes or changes a test check")
-        return "ask", f"Pull request {number.group(1)} waits for the owner: " + "; ".join(why) + "."
+    if merging:
+        return "ask", "Merging puts this change on main, and the owner approves every merge."
+    for push in PUSH.finditer(command):
+        rest = push.group("rest")
+        names_no_branch = not re.search(r"\s[^-\s]\S*\s+[^-\s]", rest)        # `git push` or `git push origin`
+        if PUSH_TO_MAIN.search(rest) or (names_no_branch and _git(cwd, "rev-parse", "--abbrev-ref", "HEAD").strip() == "main"):
+            return "ask", "This pushes straight to main, and the owner approves every change to main."
+    return None
+
+
+def check_commit(command: str, cwd: str, home: Path) -> tuple[str, str] | None:
+    """Nothing personal in a commit: everything committed here is public."""
+    if not COMMIT.search(command):
+        return None
+    marks = markers(home)
+    problems = [f"the command: {what}" for what in leaks(without_repo_path(command, Path(cwd)), marks)]
+    for name, text in pending_changes(cwd).items():
+        problems += [f"{name}: {what}" for what in leaks(text, marks)]
+    if problems:
+        return "deny", ("Everything committed here is public, and this commit would include "
+                        + "; ".join(sorted(set(problems))[:5]) + ". Remove it, then commit again.")
     return None
 
 
 def decide(command: str, cwd: str, home: Path) -> tuple[str, str] | None:
-    """(decision, reason) for a shell command, or None to let it run."""
-    if FORCE_PUSH.search(command):
-        return "deny", "Force pushing rewrites the public history of this repo. Push normally, or ask the owner."
-    if RELEASE.search(command):
-        return "ask", "This publishes a release that every installed copy will be offered. The owner decides."
-    if MERGE.search(command):
-        return review_merge(command, cwd)
-    if COMMIT.search(command):
-        marks = markers(home)
-        problems = [f"the command: {what}" for what in leaks(without_repo_path(command, Path(cwd)), marks)]
-        for name, text in pending_changes(cwd).items():
-            problems += [f"{name}: {what}" for what in leaks(text, marks)]
-        if problems:
-            return "deny", ("Everything committed here is public, and this commit would include "
-                            + "; ".join(sorted(set(problems))[:5]) + ". Remove it, then commit again.")
+    """(decision, reason) for a shell command, or None to let it run. Every check runs and the
+    strictest answer wins, so one part of a command cannot switch off the check on another."""
+    command = CONTINUATION.sub(" ", command)
+    verdicts = [
+        ("deny", "Force pushing rewrites the public history of this repo. Push normally, or ask the owner.")
+        if FORCE_PUSH.search(command) else None,
+        ("ask", "This publishes a release that every installed copy will be offered. The owner decides.")
+        if RELEASE.search(command) else None,
+        check_merge(command, cwd),
+        check_commit(command, cwd, home),
+    ]
+    for level in ("deny", "ask"):
+        found = [v for v in verdicts if v and v[0] == level]
+        if found:
+            return level, " ".join(reason for _, reason in found)
     return None
 
 

@@ -114,6 +114,26 @@ Test: `test_switched_off_the_app_hides_it_refuses_it_and_shows_originals`.
 **Lesson.** A feature that works technically can still be wrong for the user. Turning it off cleanly
 is part of building it.
 
+## Letting the agent merge "low-risk" changes by itself
+
+**What happened (2026-11-27).** To automate more, Claude Code was going to merge its own pull requests
+when the changed files were on a list: first a list of risky files that had to wait for the owner,
+then the other way round, a list of safe ones (docs, stylesheets, tests). Two independent reviews by
+fresh agents took both apart. The risky list missed the code behind the app's own invariants (the
+photo order, `.gitignore`, the key route). The safe list was not safe: a test change can skip tests
+and turn CI green, the README holds the download buttons, a stylesheet ships to every user. And the
+text-matching guard missed other ways of merging (`gh.exe`, the GitHub API, a push to `main`). One
+real bug turned up too: a merge in the same command switched off the commit privacy check.
+
+**What changed.** Everything up to the merge stays automatic, and a person approves every change
+that reaches `main` - the industry norm. The guard now asks before any merge however it is spelled
+and any push to `main`, stops `--admin` and `--auto`, and runs every check on every command, keeping
+the strictest answer. Tests: `test_every_merge_and_every_push_to_main_waits_for_the_owner`,
+`test_one_part_of_a_command_cannot_switch_off_another_check`.
+
+**Lesson.** Automate the work, not the approval. And an independent reviewer earns its keep: both
+reviews found what the author had not.
+
 ## Smaller ones
 
 - **A black console window** opened on Generate Description, because Windows gives every console

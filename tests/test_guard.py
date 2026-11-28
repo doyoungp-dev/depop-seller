@@ -33,9 +33,9 @@ def test_publishing_a_release_asks_the_owner(command, tmp_path: Path):
     assert guard.decide(command, str(tmp_path), tmp_path)[0] == "ask"
 
 
-@pytest.mark.parametrize("command", ["git status", "git push origin main", "git push -u origin main",
+@pytest.mark.parametrize("command", ["git status", "git push origin my-change", "git push -u origin my-change",
                                      "python -m depop_seller release --dry-run", "gh release list",
-                                     "python -m pytest -q"])
+                                     "gh pr create --title x", "gh pr view 7", "python -m pytest -q"])
 def test_ordinary_commands_pass(command, tmp_path: Path):
     assert guard.decide(command, str(tmp_path), tmp_path) is None
 
@@ -83,39 +83,41 @@ def test_naming_the_repo_s_own_folder_in_the_command_is_fine_but_nothing_else_pe
     assert decision == "deny"
 
 
-def _fake_pr(monkeypatch, files: list[str], patch: str = ""):
-    def gh(cwd, *args):
-        return chr(10).join(files) + chr(10) if "--name-only" in args else patch
-    monkeypatch.setattr(guard, "_gh", gh)
+@pytest.mark.parametrize("command", [
+    "gh pr merge 7 --squash --delete-branch",
+    '"C:/Program Files/GitHub CLI/gh.exe" pr merge 7 --squash',                 # a full path, quoted
+    "gh.exe pr merge 7",
+    "gh pr -R doyoungp-dev/depop-seller merge 7",                                # flags before the subcommand
+    "gh pr merge 3 --squash && gh pr merge 9 --squash",                          # more than one
+    "gh api -X PUT repos/doyoungp-dev/depop-seller/pulls/7/merge",               # the REST API
+    "gh api graphql -f query='mutation { mergePullRequest(input: {}) { clientMutationId } }'",
+    "git push origin main", "git push origin HEAD:main", "git push origin refs/heads/main",
+])
+def test_every_merge_and_every_push_to_main_waits_for_the_owner(command, tmp_path: Path):
+    decision, reason = guard.decide(command, str(tmp_path), tmp_path)
+    assert decision == "ask" and "owner" in reason
 
 
-def test_claude_merges_only_docs_stylesheets_and_added_tests_by_itself(tmp_path: Path, monkeypatch):
-    _fake_pr(monkeypatch, ["docs/LESSONS.md", "README.md", "tests/test_shop.py", "depop_seller/static/app.css"],
-             "+    assert new_check()" + chr(10))
-    assert guard.decide("gh pr merge 7 --squash --delete-branch", str(tmp_path), tmp_path) is None
+def test_a_bare_push_from_main_waits_for_the_owner_but_one_from_a_branch_does_not(tmp_path: Path):
+    repo = _repo(tmp_path)
+    subprocess.run(["git", "branch", "-M", "main"], cwd=repo, check=True, capture_output=True)
+    assert guard.decide("git push", str(repo), tmp_path)[0] == "ask"
+    assert guard.decide("git push origin", str(repo), tmp_path)[0] == "ask"
+    subprocess.run(["git", "switch", "-q", "-c", "my-change"], cwd=repo, check=True, capture_output=True)
+    assert guard.decide("git push", str(repo), tmp_path) is None
 
 
-@pytest.mark.parametrize("changed", [["depop_seller/review.py"], [".gitignore"], ["CLAUDE.md"],
-                                     ["chrome_extension/CLAUDE.md"], [".claude/hooks/guard.py"], ["pyproject.toml"],
-                                     ["docs/x.md", "depop_seller/manifest.py"], ["depop_seller/static/sell.html"]])
-def test_a_pull_request_touching_anything_else_waits_for_the_owner(changed, tmp_path: Path, monkeypatch):
-    _fake_pr(monkeypatch, changed)
-    decision, reason = guard.decide("gh pr merge 7 --squash", str(tmp_path), tmp_path)
-    assert decision == "ask" and "owner" in reason and changed[-1] in reason
+def test_merging_can_never_skip_the_checks_or_go_unattended(tmp_path: Path):
+    bash_newline, ps_newline = chr(92) + chr(10), "`" + chr(10)                 # line continuations
+    for command in ("gh pr merge 7 --admin --squash", "gh pr merge 7 --squash --auto", "gh pr merge 7 --admin=true",
+                    "gh pr merge 7 --squash " + bash_newline + "  --admin", "gh pr merge 7 " + ps_newline + " --auto"):
+        assert guard.decide(command, str(tmp_path), tmp_path)[0] == "deny", command
 
 
-def test_a_removed_test_check_waits_for_the_owner(tmp_path: Path, monkeypatch):
-    _fake_pr(monkeypatch, ["tests/test_guard.py"], "-    assert guard.decide(x) is None" + chr(10))
-    assert guard.decide("gh pr merge 7 --squash", str(tmp_path), tmp_path)[0] == "ask"
-
-
-def test_merging_can_never_skip_the_checks_or_go_unattended(tmp_path: Path, monkeypatch):
-    _fake_pr(monkeypatch, ["docs/x.md"])
-    for command in ("gh pr merge 7 --admin --squash", "gh pr merge 7 --squash --auto"):
-        assert guard.decide(command, str(tmp_path), tmp_path)[0] == "deny"
-    assert guard.decide("gh pr merge --squash", str(tmp_path), tmp_path)[0] == "ask"        # which one?
-    monkeypatch.setattr(guard, "_gh", lambda cwd, *args: None)                               # gh missing or failing
-    assert guard.decide("gh pr merge 7 --squash", str(tmp_path), tmp_path)[0] == "ask"
+def test_one_part_of_a_command_cannot_switch_off_another_check(tmp_path: Path):
+    repo, home = _repo(tmp_path), tmp_path / "Users" / "Some Body"
+    decision, reason = guard.decide(f'git commit -m "see {home}" && gh pr merge 7 --squash', str(repo), home)
+    assert decision == "deny" and "public" in reason                            # the commit check still ran
 
 
 def test_the_hook_answers_claude_code_in_its_own_format(tmp_path: Path):
